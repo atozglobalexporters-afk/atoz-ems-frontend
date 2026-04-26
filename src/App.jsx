@@ -1169,8 +1169,6 @@ export default function App() {
       case 'profile':        return <ProfilePage user={user} setUser={setUser} />;
       case 'chat':           return <ChatPage user={user} socket={socketRef.current} onlineUsers={onlineUsers} />;
       case 'tools':          return <ToolsPage />;
-      case 'chat':           return <ChatPage user={user} socket={socketRef.current} onlineUsers={onlineUsers} />;
-      case 'tools':          return <ToolsPage />;
       default:               return <Dashboard user={user} setTab={setTab} />;
     }
   };
