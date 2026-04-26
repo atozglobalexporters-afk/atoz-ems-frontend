@@ -9,8 +9,8 @@
 
   "scripts": {
     "dev": "vite",
-    "build": "npx vite build",
-    "preview": "vite preview"
+    "build": "npx --yes vite build",
+    "preview": "npx --yes vite preview"
   },
 
   "dependencies": {
