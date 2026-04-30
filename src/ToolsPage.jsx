@@ -1,5 +1,5 @@
 // ToolsPage.jsx — Super App Tools Hub
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const C = {
   bg:'#0f172a', surf:'#1e293b', alt:'#334155', bdr:'#334155',
@@ -25,6 +25,7 @@ const Calculator = () => {
   const [op,setOp]=useState(null);
   const [newNum,setNewNum]=useState(true);
   const [mode,setMode]=useState('basic');
+  const [history,setHistory]=useState([]);
 
   const press = (val) => {
     if (val==='C'){setDisplay('0');setPrev(null);setOp(null);setNewNum(true);return;}
@@ -36,7 +37,9 @@ const Calculator = () => {
       if (prev===null||!op)return;
       const cur=parseFloat(display);
       const res={'+':prev+cur,'-':prev-cur,'×':prev*cur,'÷':prev/cur}[op];
-      setDisplay(String(parseFloat(res.toFixed(10))));
+      const r=parseFloat(res.toFixed(10));
+      setHistory(h=>[`${prev} ${op} ${cur} = ${r}`,...h.slice(0,4)]);
+      setDisplay(String(r));
       setPrev(null);setOp(null);setNewNum(true);return;
     }
     if (val==='.'){if(newNum){setDisplay('0.');setNewNum(false);return;}if(!display.includes('.'))setDisplay(d=>d+'.');return;}
@@ -46,77 +49,124 @@ const Calculator = () => {
 
   const sciPress = (fn) => {
     const v=parseFloat(display);
-    const res={sin:Math.sin(v*Math.PI/180),cos:Math.cos(v*Math.PI/180),tan:Math.tan(v*Math.PI/180),log:Math.log10(v),ln:Math.log(v),sqrt:Math.sqrt(v),'x²':v*v,'x³':v*v*v,'1/x':1/v}[fn];
+    const res={sin:Math.sin(v*Math.PI/180),cos:Math.cos(v*Math.PI/180),tan:Math.tan(v*Math.PI/180),log:Math.log10(v),ln:Math.log(v),'√':Math.sqrt(v),'x²':v*v,'x³':v*v*v,'1/x':1/v}[fn];
     setDisplay(String(parseFloat(res.toFixed(10))));setNewNum(true);
   };
 
-  const basicBtns=[['C','±','%','÷'],['7','8','9','×'],['4','5','6','-'],['1','2','3','+'],['.','0','⌫','=']];
-  const sciBtns=[['sin','cos','tan','log'],['ln','√','x²','x³'],['1/x','π','e','(']];
+  const basicBtns=[
+    [{l:'C',c:'#475569'},{l:'±',c:'#475569'},{l:'%',c:'#475569'},{l:'÷',c:C.acc}],
+    [{l:'7'},{l:'8'},{l:'9'},{l:'×',c:C.acc}],
+    [{l:'4'},{l:'5'},{l:'6'},{l:'-',c:C.acc}],
+    [{l:'1'},{l:'2'},{l:'3'},{l:'+',c:C.acc}],
+    [{l:'.',c:'#475569'},{l:'0'},{l:'⌫',c:'#475569'},{l:'=',c:'#10b981'}],
+  ];
+
+  const sciBtns=[['sin','cos','tan','log'],['ln','√','x²','x³'],['1/x','π','e','⌫']];
 
   return (
-    <Card style={{maxWidth:280}}>
-      <div style={{display:'flex',gap:6,marginBottom:10}}>
-        {['basic','scientific'].map(m=><button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:'5px',borderRadius:6,border:'none',cursor:'pointer',background:mode===m?C.acc:C.alt,color:mode===m?'#fff':C.txs,fontSize:11,fontWeight:600}}>{m.charAt(0).toUpperCase()+m.slice(1)}</button>)}
-      </div>
-      <div style={{background:C.bg,borderRadius:10,padding:'12px 14px',marginBottom:10,textAlign:'right'}}>
-        {op&&<div style={{color:C.txs,fontSize:11}}>{prev} {op}</div>}
-        <div style={{color:C.tx,fontSize:28,fontWeight:300,fontFamily:'monospace',overflow:'hidden',textOverflow:'ellipsis'}}>{display}</div>
-      </div>
-      {mode==='scientific'&&(
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4,marginBottom:4}}>
-          {sciBtns.flat().map(b=>(
-            <button key={b} onClick={()=>b==='π'?setDisplay('3.14159265'):b==='e'?setDisplay('2.71828182'):sciPress(b)} style={{padding:'7px',borderRadius:7,border:'none',cursor:'pointer',background:C.alt,color:C.acc,fontSize:11,fontWeight:600}}>{b}</button>
+    <div style={{display:'grid',gridTemplateColumns:mode==='scientific'?'1fr 320px':'1fr',gap:16,maxWidth:mode==='scientific'?700:340}}>
+      <Card style={{padding:16}}>
+        <div style={{display:'flex',gap:6,marginBottom:12}}>
+          {['basic','scientific'].map(m=>(
+            <button key={m} onClick={()=>setMode(m)} style={{flex:1,padding:'6px',borderRadius:7,border:'none',cursor:'pointer',background:mode===m?C.acc:C.alt,color:mode===m?'#fff':C.txs,fontSize:11,fontWeight:700,letterSpacing:'.04em'}}>
+              {m==='basic'?'Basic':'Scientific'}
+            </button>
           ))}
         </div>
+        <div style={{background:'#0a0f1e',borderRadius:12,padding:'16px 18px',marginBottom:12,minHeight:80,display:'flex',flexDirection:'column',justifyContent:'flex-end',textAlign:'right'}}>
+          {op&&<div style={{color:C.txs,fontSize:12,marginBottom:2,fontFamily:'monospace'}}>{prev} {op}</div>}
+          <div style={{color:'#fff',fontSize:36,fontWeight:200,fontFamily:'monospace',overflow:'hidden',textOverflow:'ellipsis',letterSpacing:'-1px'}}>{display}</div>
+        </div>
+        {mode==='scientific'&&(
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5,marginBottom:5}}>
+            {sciBtns.flat().map(b=>(
+              <button key={b} onClick={()=>{
+                if(b==='π')setDisplay('3.14159265');
+                else if(b==='e')setDisplay('2.71828182');
+                else if(b==='⌫')press('⌫');
+                else sciPress(b);
+              }} style={{padding:'9px',borderRadius:8,border:'none',cursor:'pointer',background:'rgba(99,102,241,.15)',color:C.acc,fontSize:12,fontWeight:700,transition:'all .1s'}}
+                onMouseEnter={e=>e.currentTarget.style.background='rgba(99,102,241,.3)'}
+                onMouseLeave={e=>e.currentTarget.style.background='rgba(99,102,241,.15)'}>
+                {b}
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5}}>
+          {basicBtns.flat().map((b,i)=>(
+            <button key={i} onClick={()=>press(b.l)} style={{padding:'16px 8px',borderRadius:10,border:'none',cursor:'pointer',background:b.c||C.alt,color:'#fff',fontSize:18,fontWeight:b.c?700:400,transition:'all .1s',fontFamily:'monospace'}}
+              onMouseEnter={e=>e.currentTarget.style.opacity='.8'}
+              onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+              {b.l}
+            </button>
+          ))}
+        </div>
+      </Card>
+      {history.length>0&&(
+        <Card style={{padding:14}}>
+          <div style={{color:C.txs,fontSize:11,fontWeight:700,marginBottom:10,letterSpacing:'.06em',textTransform:'uppercase'}}>History</div>
+          {history.map((h,i)=>(
+            <div key={i} style={{color:C.txm,fontSize:12,fontFamily:'monospace',padding:'5px 0',borderBottom:`1px solid ${C.bdr}`}}>{h}</div>
+          ))}
+        </Card>
       )}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4}}>
-        {basicBtns.flat().map(b=>{
-          const isOp=['+','-','×','÷','='].includes(b);
-          const isDark=['C','±','%'].includes(b);
-          return <button key={b} onClick={()=>press(b)} style={{padding:'12px',borderRadius:9,border:'none',cursor:'pointer',background:isOp?C.acc:isDark?C.alt:C.bg,color:isOp?'#fff':C.tx,fontSize:16,fontWeight:isOp?700:400,transition:'opacity .1s'}}
-            onMouseEnter={e=>e.currentTarget.style.opacity='.8'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}>{b}</button>;
-        })}
-      </div>
-    </Card>
+    </div>
   );
 };
 
 // ── Currency Converter ────────────────────────────────────────
 const CurrencyConverter = () => {
-  const rates = { USD:1, INR:83.5, AED:3.67, EUR:0.92, GBP:0.79, JPY:151.2, SGD:1.34, CAD:1.36, AUD:1.52, CNY:7.24, SAR:3.75, QAR:3.64, KWD:0.31, BHD:0.38, OMR:0.38, PKR:278.5, BDT:110.5, LKR:305.0, MYR:4.72, IDR:15800, THB:35.1, PHP:56.8, VND:24500, KRW:1330, HKD:7.82, TWD:31.5, MXN:17.2, BRL:5.0, ZAR:18.6, NGN:1580, EGP:48.5, TRY:32.1, RUB:91.5, CHF:0.90, SEK:10.5, NOK:10.7, DKK:6.88, PLN:4.02, CZK:23.1, HUF:360, RON:4.57, BGN:1.80, HRK:7.0, RSD:108, UAH:38.5, NZD:1.63, FJD:2.27, PGK:3.73 };
+  const rates = {
+    USD:1,EUR:0.92,GBP:0.79,JPY:151.2,CHF:0.90,CAD:1.36,AUD:1.52,NZD:1.63,
+    INR:83.5,PKR:278.5,BDT:110.5,LKR:305.0,NPR:133.5,MMK:2100,
+    AED:3.67,SAR:3.75,QAR:3.64,KWD:0.31,BHD:0.38,OMR:0.38,JOD:0.71,IQD:1310,IRR:42000,YER:250,
+    EGP:48.5,NGN:1580,ZAR:18.6,KES:130,GHS:15.5,ETB:56.5,TZS:2550,UGX:3750,MAD:10.1,TND:3.12,DZD:134,LYD:4.85,SDG:600,AOA:850,
+    CNY:7.24,HKD:7.82,TWD:31.5,KRW:1330,SGD:1.34,MYR:4.72,IDR:15800,THB:35.1,PHP:56.8,VND:24500,
+    BRL:5.0,MXN:17.2,ARS:900,COP:3950,CLP:950,PEN:3.75,VES:36,BOB:6.91,PYG:7300,UYU:39,
+    RUB:91.5,TRY:32.1,UAH:38.5,PLN:4.02,CZK:23.1,HUF:360,RON:4.57,SEK:10.5,NOK:10.7,DKK:6.88,
+    BGN:1.80,HRK:7.0,RSD:108,ISK:138,HUF:360,
+    ILS:3.65,AFN:70,UZS:12600,KZT:450,AZN:1.70,GEL:2.70,AMD:400,
+    FJD:2.27,PGK:3.73,WST:2.73,TOP:2.37,VUV:120,SBD:8.5,
+    XAF:600,XOF:600,XPF:110,
+  };
   const [amount,setAmount]=useState('1');
   const [from,setFrom]=useState('USD');
   const [to,setTo]=useState('INR');
-  const result = (parseFloat(amount)||0) / rates[from] * rates[to];
-  const currencies = Object.keys(rates);
+  const [search,setSearch]=useState('');
+  const result=(parseFloat(amount)||0)/rates[from]*rates[to];
+  const currencies=Object.keys(rates);
+  const filtered=currencies.filter(c=>c.toLowerCase().includes(search.toLowerCase()));
+
   return (
-    <Card>
-      <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>💱 Currency Converter</h3>
-      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12}}>
-        <input value={amount} onChange={e=>setAmount(e.target.value)} type="number" style={{flex:1,background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:14,fontWeight:700,outline:'none',fontFamily:'inherit'}} />
+    <Card style={{maxWidth:420}}>
+      <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>💱 Currency Converter <span style={{color:C.txs,fontSize:10,fontWeight:400}}>({currencies.length} currencies)</span></h3>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search currency (e.g. INR, EUR)..." style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'7px 12px',color:C.tx,fontSize:12,outline:'none',marginBottom:10,boxSizing:'border-box',fontFamily:'inherit'}} />
+      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
+        <input value={amount} onChange={e=>setAmount(e.target.value)} type="number" style={{flex:1,background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:16,fontWeight:700,outline:'none',fontFamily:'inherit'}} />
         <select value={from} onChange={e=>setFrom(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 10px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
-          {currencies.map(c=><option key={c} value={c} style={{background:C.surf}}>{c}</option>)}
+          {filtered.map(c=><option key={c} value={c} style={{background:C.surf}}>{c}</option>)}
         </select>
       </div>
-      <div style={{textAlign:'center',marginBottom:12}}>
-        <button onClick={()=>{const t=from;setFrom(to);setTo(t);}} style={{background:C.accS,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 16px',color:C.acc,cursor:'pointer',fontSize:16}}>⇅</button>
+      <div style={{textAlign:'center',marginBottom:10}}>
+        <button onClick={()=>{const t=from;setFrom(to);setTo(t);}} style={{background:C.accS,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 20px',color:C.acc,cursor:'pointer',fontSize:18,fontWeight:700}}>⇅</button>
       </div>
-      <div style={{background:C.bg,borderRadius:10,padding:'14px',textAlign:'center',marginBottom:12}}>
-        <div style={{color:C.txs,fontSize:11,marginBottom:4}}>{amount} {from} =</div>
-        <div style={{color:C.ok,fontSize:24,fontWeight:800,fontFamily:'monospace'}}>{result.toFixed(2)}</div>
-        <div style={{color:C.tx,fontSize:13,fontWeight:600}}>{to}</div>
+      <div style={{background:'#0a0f1e',borderRadius:12,padding:'16px',textAlign:'center',marginBottom:10}}>
+        <div style={{color:C.txs,fontSize:12,marginBottom:4}}>{amount} {from} =</div>
+        <div style={{color:C.ok,fontSize:32,fontWeight:800,fontFamily:'monospace'}}>{result.toFixed(2)}</div>
+        <div style={{color:C.tx,fontSize:14,fontWeight:700}}>{to}</div>
       </div>
       <select value={to} onChange={e=>setTo(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 10px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
-        {currencies.map(c=><option key={c} value={c} style={{background:C.surf}}>{c}</option>)}
+        {filtered.map(c=><option key={c} value={c} style={{background:C.surf}}>{c}</option>)}
       </select>
-      <div style={{color:C.txm,fontSize:10,marginTop:8,textAlign:'center'}}>Rates approximate · Updated regularly</div>
+      <div style={{color:C.txm,fontSize:10,marginTop:8,textAlign:'center'}}>Rates approximate · For reference only</div>
     </Card>
   );
 };
 
 // ── Unit Converter ────────────────────────────────────────────
 const UnitConverter = () => {
-  const cats = {
+  const cats={
     Weight:{KG:1,LB:2.205,OZ:35.274,G:1000,TON:0.001},
     Length:{M:1,KM:0.001,CM:100,MM:1000,INCH:39.37,FT:3.281,MILE:0.000621},
     Temperature:null,
@@ -126,8 +176,8 @@ const UnitConverter = () => {
   const [from,setFrom]=useState('KG');
   const [to,setTo]=useState('LB');
 
-  const convert = () => {
-    if (cat==='Temperature') {
+  const convert=()=>{
+    if(cat==='Temperature'){
       const v=parseFloat(val)||0;
       if(from==='C'&&to==='F')return(v*9/5+32).toFixed(2);
       if(from==='F'&&to==='C')return((v-32)*5/9).toFixed(2);
@@ -137,29 +187,29 @@ const UnitConverter = () => {
       if(from==='K'&&to==='F')return((v-273.15)*9/5+32).toFixed(2);
       return v.toFixed(2);
     }
-    const r=cats[cat]; return((parseFloat(val)||0)/r[from]*r[to]).toFixed(4);
+    const r=cats[cat];return((parseFloat(val)||0)/r[from]*r[to]).toFixed(4);
   };
 
   const units=cat==='Temperature'?['C','F','K']:Object.keys(cats[cat]||{});
   return (
-    <Card>
+    <Card style={{maxWidth:420}}>
       <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:12}}>📐 Unit Converter</h3>
       <div style={{display:'flex',gap:5,marginBottom:12}}>
-        {Object.keys(cats).map(c=><button key={c} onClick={()=>{setCat(c);const u=c==='Temperature'?['C','F','K']:Object.keys(cats[c]);setFrom(u[0]);setTo(u[1]);}} style={{flex:1,padding:'5px',borderRadius:6,border:'none',cursor:'pointer',background:cat===c?C.acc:C.alt,color:cat===c?'#fff':C.txs,fontSize:10,fontWeight:600}}>{c}</button>)}
+        {Object.keys(cats).map(c=><button key={c} onClick={()=>{setCat(c);const u=c==='Temperature'?['C','F','K']:Object.keys(cats[c]);setFrom(u[0]);setTo(u[1]);}} style={{flex:1,padding:'6px',borderRadius:6,border:'none',cursor:'pointer',background:cat===c?C.acc:C.alt,color:cat===c?'#fff':C.txs,fontSize:11,fontWeight:600}}>{c}</button>)}
       </div>
       <input value={val} onChange={e=>setVal(e.target.value)} type="number" style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:14,outline:'none',marginBottom:8,boxSizing:'border-box',fontFamily:'inherit'}} />
       <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:8,alignItems:'center',marginBottom:12}}>
         <select value={from} onChange={e=>setFrom(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'8px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
           {units.map(u=><option key={u} value={u} style={{background:C.surf}}>{u}</option>)}
         </select>
-        <span style={{color:C.txs,fontSize:14}}>→</span>
+        <span style={{color:C.txs,fontSize:16,fontWeight:700}}>→</span>
         <select value={to} onChange={e=>setTo(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'8px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
           {units.map(u=><option key={u} value={u} style={{background:C.surf}}>{u}</option>)}
         </select>
       </div>
-      <div style={{background:C.bg,borderRadius:10,padding:'12px',textAlign:'center'}}>
-        <div style={{color:C.ok,fontSize:22,fontWeight:800,fontFamily:'monospace'}}>{convert()}</div>
-        <div style={{color:C.txs,fontSize:11}}>{val} {from} = {convert()} {to}</div>
+      <div style={{background:'#0a0f1e',borderRadius:10,padding:'14px',textAlign:'center'}}>
+        <div style={{color:C.ok,fontSize:26,fontWeight:800,fontFamily:'monospace'}}>{convert()}</div>
+        <div style={{color:C.txs,fontSize:12,marginTop:4}}>{val} {from} = {convert()} {to}</div>
       </div>
     </Card>
   );
@@ -173,52 +223,57 @@ const NotesApp = () => {
   const [body,setBody]=useState('');
   const [saved,setSaved]=useState(false);
 
-  const save = () => {
-    if (!title.trim()) return;
-    const id = active||Date.now().toString();
-    const note = { id, title, body, updatedAt: new Date().toISOString() };
-    const updated = active ? notes.map(n=>n.id===active?note:n) : [note,...notes];
+  const save=()=>{
+    if(!title.trim())return;
+    const id=active||Date.now().toString();
+    const note={id,title,body,updatedAt:new Date().toISOString()};
+    const updated=active?notes.map(n=>n.id===active?note:n):[note,...notes];
     setNotes(updated);
-    localStorage.setItem('ems_notes', JSON.stringify(updated));
+    localStorage.setItem('ems_notes',JSON.stringify(updated));
     setActive(id);
     setSaved(true);
     setTimeout(()=>setSaved(false),2000);
   };
 
-  const del = (id) => {
+  const del=(id)=>{
     const n=notes.filter(n=>n.id!==id);
     setNotes(n);
     localStorage.setItem('ems_notes',JSON.stringify(n));
     if(active===id){setActive(null);setTitle('');setBody('');}
   };
 
-  const newNote = () => { setActive(null);setTitle('');setBody('');setSaved(false); };
+  const newNote=()=>{setActive(null);setTitle('');setBody('');setSaved(false);};
 
   return (
-    <div style={{display:'grid',gridTemplateColumns:'220px 1fr',gap:14,height:380}}>
+    <div style={{display:'grid',gridTemplateColumns:'240px 1fr',gap:14,height:420}}>
       <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:12,overflow:'hidden',display:'flex',flexDirection:'column'}}>
         <div style={{padding:'10px 12px',borderBottom:`1px solid ${C.bdr}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span style={{color:C.tx,fontSize:12,fontWeight:700}}>📝 Notes ({notes.length})</span>
-          <button onClick={newNote} style={{background:C.acc,border:'none',borderRadius:6,padding:'3px 9px',color:'#fff',cursor:'pointer',fontSize:10,fontWeight:600}}>+ New</button>
+          <button onClick={newNote} style={{background:C.acc,border:'none',borderRadius:6,padding:'4px 10px',color:'#fff',cursor:'pointer',fontSize:11,fontWeight:600}}>+ New</button>
         </div>
         <div style={{flex:1,overflowY:'auto'}}>
-          {notes.length===0?<div style={{padding:16,color:C.txm,fontSize:12,textAlign:'center'}}>No notes yet</div>
-          :notes.map(n=>(
-            <div key={n.id} onClick={()=>{setActive(n.id);setTitle(n.title);setBody(n.body);setSaved(false);}} style={{padding:'9px 12px',borderBottom:`1px solid ${C.bdr}`,cursor:'pointer',background:active===n.id?C.accS:'transparent'}}
-              onMouseEnter={e=>{if(active!==n.id)e.currentTarget.style.background=C.alt;}} onMouseLeave={e=>{if(active!==n.id)e.currentTarget.style.background='transparent';}}>
-              <div style={{color:C.tx,fontSize:12,fontWeight:600,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{n.title}</div>
-              <div style={{color:C.txs,fontSize:10}}>{new Date(n.updatedAt).toLocaleDateString()}</div>
-            </div>
-          ))}
+          {notes.length===0
+            ?<div style={{padding:20,color:C.txm,fontSize:12,textAlign:'center'}}>No notes yet.<br/>Click + New to start.</div>
+            :notes.map(n=>(
+              <div key={n.id} onClick={()=>{setActive(n.id);setTitle(n.title);setBody(n.body);setSaved(false);}}
+                style={{padding:'10px 12px',borderBottom:`1px solid ${C.bdr}`,cursor:'pointer',background:active===n.id?C.accS:'transparent',borderLeft:active===n.id?`3px solid ${C.acc}`:'3px solid transparent'}}
+                onMouseEnter={e=>{if(active!==n.id)e.currentTarget.style.background=C.alt;}}
+                onMouseLeave={e=>{if(active!==n.id)e.currentTarget.style.background='transparent';}}>
+                <div style={{color:C.tx,fontSize:12,fontWeight:600,marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{n.title}</div>
+                <div style={{color:C.txs,fontSize:10}}>{new Date(n.updatedAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+              </div>
+            ))
+          }
         </div>
       </div>
-      <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:12,padding:14,display:'flex',flexDirection:'column',gap:8}}>
-        <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Note title..." style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:14,fontWeight:600,outline:'none',fontFamily:'inherit'}} />
-        <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Write your note here..." style={{flex:1,background:C.bg,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'10px 12px',color:C.tx,fontSize:12,outline:'none',resize:'none',lineHeight:1.6,fontFamily:'inherit'}} />
-        <div style={{display:'flex',gap:7,alignItems:'center'}}>
-          <Btn onClick={save} disabled={!title.trim()}>💾 Save</Btn>
+      <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:12,padding:16,display:'flex',flexDirection:'column',gap:10}}>
+        <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Note title..." style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'10px 13px',color:C.tx,fontSize:15,fontWeight:700,outline:'none',fontFamily:'inherit'}} />
+        <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Write your note here..." style={{flex:1,background:C.bg,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'12px 13px',color:C.tx,fontSize:13,outline:'none',resize:'none',lineHeight:1.7,fontFamily:'inherit'}} />
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <Btn onClick={save} disabled={!title.trim()}>💾 Save Note</Btn>
           {active&&<Btn variant="danger" onClick={()=>del(active)}>🗑 Delete</Btn>}
-          {saved&&<span style={{color:C.ok,fontSize:11,fontWeight:600}}>✅ Saved!</span>}
+          {saved&&<span style={{color:C.ok,fontSize:12,fontWeight:700}}>✅ Saved!</span>}
+          {!active&&title&&<span style={{color:C.txs,fontSize:11}}>New note — save to add</span>}
         </div>
       </div>
     </div>
@@ -226,31 +281,39 @@ const NotesApp = () => {
 };
 
 // ── Web Tools ─────────────────────────────────────────────────
+const getFavicon = (domain) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
 const WebTools = () => {
   const [searchQ,setSearchQ]=useState('');
-  const tools = [
-    {icon:'🤖',name:'ChatGPT',desc:'AI Assistant',action:()=>window.open('https://chat.openai.com','_blank')},
-    {icon:'📧',name:'Gmail',desc:'Company email',action:()=>window.open('https://mail.google.com','_blank')},
-    {icon:'📁',name:'Google Drive',desc:'Shared documents',action:()=>window.open('https://drive.google.com','_blank')},
-    {icon:'📅',name:'Google Meet',desc:'Start or join meeting',action:()=>window.open('https://meet.google.com','_blank')},
-    {icon:'📊',name:'Google Sheets',desc:'Spreadsheets',action:()=>window.open('https://sheets.google.com','_blank')},
-    {icon:'📄',name:'Google Docs',desc:'Documents',action:()=>window.open('https://docs.google.com','_blank')},
-    {icon:'📸',name:'Instagram',desc:'Social media',action:()=>window.open('https://instagram.com','_blank')},
-    {icon:'🐦',name:'Twitter / X',desc:'Social media',action:()=>window.open('https://x.com','_blank')},
-    {icon:'💼',name:'LinkedIn',desc:'Professional network',action:()=>window.open('https://linkedin.com','_blank')},
-    {icon:'💬',name:'WhatsApp Web',desc:'Messaging',action:()=>window.open('https://web.whatsapp.com','_blank')},
+  const tools=[
+    {name:'ChatGPT',desc:'AI Assistant',domain:'chat.openai.com',url:'https://chat.openai.com'},
+    {name:'Gmail',desc:'Email',domain:'mail.google.com',url:'https://mail.google.com'},
+    {name:'Google Drive',desc:'Cloud storage',domain:'drive.google.com',url:'https://drive.google.com'},
+    {name:'Google Meet',desc:'Video calls',domain:'meet.google.com',url:'https://meet.google.com'},
+    {name:'Google Sheets',desc:'Spreadsheets',domain:'sheets.google.com',url:'https://sheets.google.com'},
+    {name:'Google Docs',desc:'Documents',domain:'docs.google.com',url:'https://docs.google.com'},
+    {name:'WhatsApp',desc:'Messaging',domain:'web.whatsapp.com',url:'https://web.whatsapp.com'},
+    {name:'Instagram',desc:'Social media',domain:'instagram.com',url:'https://instagram.com'},
+    {name:'LinkedIn',desc:'Professional',domain:'linkedin.com',url:'https://linkedin.com'},
+    {name:'Twitter / X',desc:'Social media',domain:'x.com',url:'https://x.com'},
   ];
+
   return (
     <div>
-      <div style={{display:'flex',gap:8,marginBottom:16}}>
-        <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQ)}`,'_blank');}} placeholder="🔍 Search Google..." style={{flex:1,background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:9,padding:'9px 14px',color:C.tx,fontSize:13,outline:'none',fontFamily:'inherit'}} />
+      <div style={{display:'flex',gap:8,marginBottom:18}}>
+        <input value={searchQ} onChange={e=>setSearchQ(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter'&&searchQ.trim())window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQ)}`,'_blank');}}
+          placeholder="🔍 Search Google..."
+          style={{flex:1,background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:9,padding:'10px 14px',color:C.tx,fontSize:13,outline:'none',fontFamily:'inherit'}} />
         <Btn onClick={()=>window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQ)}`,'_blank')} disabled={!searchQ.trim()}>Search</Btn>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:10}}>
         {tools.map(t=>(
-          <div key={t.name} onClick={t.action} style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:11,padding:'14px 12px',cursor:'pointer',textAlign:'center',transition:'all .15s'}}
-            onMouseEnter={e=>{e.currentTarget.style.background=C.alt;e.currentTarget.style.borderColor=C.acc;}} onMouseLeave={e=>{e.currentTarget.style.background=C.surf;e.currentTarget.style.borderColor=C.bdr;}}>
-            <div style={{fontSize:24,marginBottom:6}}>{t.icon}</div>
+          <div key={t.name} onClick={()=>window.open(t.url,'_blank')}
+            style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:12,padding:'16px 12px',cursor:'pointer',textAlign:'center',transition:'all .15s'}}
+            onMouseEnter={e=>{e.currentTarget.style.background=C.alt;e.currentTarget.style.borderColor=C.acc;e.currentTarget.style.transform='translateY(-2px)';}}
+            onMouseLeave={e=>{e.currentTarget.style.background=C.surf;e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.transform='translateY(0)';}}>
+            <img src={getFavicon(t.domain)} alt={t.name} style={{width:36,height:36,marginBottom:8,borderRadius:8}} onError={e=>e.target.style.display='none'} />
             <div style={{color:C.tx,fontSize:11,fontWeight:700,marginBottom:2}}>{t.name}</div>
             <div style={{color:C.txs,fontSize:10}}>{t.desc}</div>
           </div>
@@ -261,7 +324,7 @@ const WebTools = () => {
 };
 
 // ── Main Tools Page ───────────────────────────────────────────
-const TOOLS = [
+const TOOLS=[
   {id:'web',icon:'🌐',label:'Web & Social'},
   {id:'calc',icon:'🧮',label:'Calculator'},
   {id:'currency',icon:'💱',label:'Currency'},
@@ -276,7 +339,7 @@ export default function ToolsPage() {
       <h2 style={{color:C.tx,fontSize:19,fontWeight:800,marginBottom:16}}>🧰 Tools Hub</h2>
       <div style={{display:'flex',gap:6,marginBottom:20,flexWrap:'wrap'}}>
         {TOOLS.map(t=>(
-          <button key={t.id} onClick={()=>setActive(t.id)} style={{padding:'7px 14px',borderRadius:8,border:'none',cursor:'pointer',background:active===t.id?C.acc:C.alt,color:active===t.id?'#fff':C.txs,fontWeight:600,fontSize:12,transition:'all .15s',display:'flex',alignItems:'center',gap:5}}>
+          <button key={t.id} onClick={()=>setActive(t.id)} style={{padding:'7px 16px',borderRadius:8,border:'none',cursor:'pointer',background:active===t.id?C.acc:C.alt,color:active===t.id?'#fff':C.txs,fontWeight:600,fontSize:12,transition:'all .15s',display:'flex',alignItems:'center',gap:5}}>
             {t.icon} {t.label}
           </button>
         ))}
