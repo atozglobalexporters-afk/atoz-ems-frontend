@@ -778,70 +778,207 @@ const AttendancePage = ({user}) => {
       )}
     </div>
   );
-};
 
 // ── Work Logs ─────────────────────────────────────────────────
 const WorkLogsPage = ({user}) => {
   const isAdmin=['admin','super_admin'].includes(user.role);
   const [logs,setLogs]=useState([]);
+  const [employees,setEmployees]=useState([]);
   const [loading,setLoading]=useState(true);
   const [modal,setModal]=useState(false);
   const [saving,setSaving]=useState(false);
   const [toast,setToast]=useState(null);
+  const [filterUser,setFilterUser]=useState('');
+  const [filterDate,setFilterDate]=useState('');
   const [form,setForm]=useState({description:'',hoursWorked:'',date:new Date().toISOString().split('T')[0]});
+  const [files,setFiles]=useState([]);
+  const fileInputRef=useRef(null);
 
   const load=useCallback(async()=>{
-    try{setLoading(true);const r=await api.get('/worklogs');setLogs(r.data||[]);}
-    catch{}finally{setLoading(false);}
-  },[]);
+    try{
+      setLoading(true);
+      let q='';
+      if(filterUser) q+=`?userId=${filterUser}`;
+      if(filterDate) q+=(q?'&':'?')+`date=${filterDate}`;
+      const r=await api.get(`/worklogs${q}`);
+      setLogs(r.data||[]);
+    }catch{}finally{setLoading(false);}
+  },[filterUser,filterDate]);
+
   useEffect(()=>{load();},[load]);
+  useEffect(()=>{
+    if(isAdmin) api.get('/users').then(r=>setEmployees(r.data||[])).catch(()=>{});
+  },[isAdmin]);
 
   const handleSave=async()=>{
     if(!form.description){setToast({message:'Description required',type:'error'});return;}
-    try{setSaving(true);await api.post('/worklogs',form);setToast({message:'Work log submitted',type:'success'});setModal(false);setForm({description:'',hoursWorked:'',date:new Date().toISOString().split('T')[0]});await load();}
-    catch(err){setToast({message:err.message,type:'error'});}finally{setSaving(false);}
+    try{
+      setSaving(true);
+      const formData=new FormData();
+      formData.append('description',form.description);
+      formData.append('hoursWorked',form.hoursWorked||0);
+      formData.append('date',form.date);
+      files.forEach(f=>formData.append('files',f));
+      const token=localStorage.getItem('ems_token');
+      const r=await fetch(`${API}/api/worklogs`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${token}`},
+        body:formData,
+      });
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.message);
+      setToast({message:'Work log submitted',type:'success'});
+      setModal(false);
+      setForm({description:'',hoursWorked:'',date:new Date().toISOString().split('T')[0]});
+      setFiles([]);
+      await load();
+    }catch(err){setToast({message:err.message,type:'error'});}finally{setSaving(false);}
   };
+
+  const handleDelete=async(id)=>{
+    if(!window.confirm('Delete this work log?'))return;
+    try{
+      await api.del(`/worklogs/${id}`);
+      setToast({message:'Deleted',type:'info'});
+      await load();
+    }catch(err){setToast({message:err.message,type:'error'});}
+  };
+
+  const handleApprove=async(id)=>{
+    try{
+      await api.put(`/worklogs/${id}`,{approved:true});
+      setToast({message:'Approved',type:'success'});
+      await load();
+    }catch(err){setToast({message:err.message,type:'error'});}
+  };
+
+  const getFileIcon=(mimetype)=>{
+    if(!mimetype) return '📄';
+    if(mimetype.startsWith('image/')) return '🖼';
+    if(mimetype.includes('pdf')) return '📕';
+    if(mimetype.includes('word')) return '📘';
+    return '📄';
+  };
+
+  const formatSize=(bytes)=>bytes<1024?bytes+'B':bytes<1048576?(bytes/1024).toFixed(1)+'KB':(bytes/1048576).toFixed(1)+'MB';
 
   return (
     <div style={{padding:28}}>
       {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
+      
+      {/* Header */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-        <div><h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Work Logs</h2><p style={{color:C.txm,fontSize:12,margin:0}}>{isAdmin?'All employee logs':'Submit your daily work'}</p></div>
+        <div>
+          <h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Work Logs</h2>
+          <p style={{color:C.txm,fontSize:12,margin:0}}>{isAdmin?'All employee logs':'Submit your daily work'}</p>
+        </div>
         <Btn onClick={()=>setModal(true)}>+ Add Work Log</Btn>
       </div>
-      {loading?<Spinner />:logs.length===0?<Card><p style={{color:C.txm,textAlign:'center',fontSize:13}}>No work logs yet.</p></Card>:(
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
-          {logs.map(l=>(
-            <Card key={l._id}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-                <div style={{display:'flex',gap:10,flex:1}}>
-                  {isAdmin&&<Avatar name={l.user?.name||'?'} size={34} />}
-                  <div style={{flex:1}}>
-                    {isAdmin&&<div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:3}}>{l.user?.name}</div>}
-                    <div style={{color:C.txs,fontSize:12,lineHeight:1.6}}>{l.description}</div>
-                    {l.tasks?.length>0&&<div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>{l.tasks.map((t,i)=><Badge key={i} label={t.title} color={t.status==='done'?'green':'yellow'} />)}</div>}
+
+      {/* Filters */}
+      <Card style={{marginBottom:14,padding:'12px 16px'}}>
+        <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+          {isAdmin&&(
+            <select value={filterUser} onChange={e=>setFilterUser(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'7px 12px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
+              <option value="">All Employees</option>
+              {employees.map(e=><option key={e._id} value={e._id}>{e.name}</option>)}
+            </select>
+          )}
+          <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'7px 12px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />
+          <Btn variant="ghost" size="sm" onClick={()=>{setFilterUser('');setFilterDate('');}}>Clear</Btn>
+          <span style={{color:C.txs,fontSize:11,marginLeft:'auto'}}>{logs.length} logs</span>
+        </div>
+      </Card>
+
+      {loading?<Spinner />:logs.length===0
+        ?<Card><p style={{color:C.txm,textAlign:'center',fontSize:13,padding:20}}>No work logs found.</p></Card>
+        :(
+          <div style={{display:'flex',flexDirection:'column',gap:12}}>
+            {logs.map(l=>(
+              <Card key={l._id}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12}}>
+                  <div style={{display:'flex',gap:12,flex:1}}>
+                    {isAdmin&&<Avatar name={l.user?.name||'?'} size={36} />}
+                    <div style={{flex:1}}>
+                      {isAdmin&&<div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>{l.user?.name}</div>}
+                      <div style={{color:C.txs,fontSize:12,lineHeight:1.7,marginBottom:8}}>{l.description}</div>
+                      
+                      {/* Files */}
+                      {l.files&&l.files.length>0&&(
+                        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}>
+                          {l.files.map((f,i)=>(
+                            <a key={i} href={`${API}${f.url}`} target="_blank" rel="noopener noreferrer"
+                              style={{display:'flex',alignItems:'center',gap:5,background:C.alt,borderRadius:8,padding:'5px 10px',textDecoration:'none',border:`1px solid ${C.bdr}`}}>
+                              <span style={{fontSize:14}}>{getFileIcon(f.mimetype)}</span>
+                              <span style={{color:C.tx,fontSize:11,fontWeight:600}}>{f.originalName}</span>
+                              <span style={{color:C.txs,fontSize:10}}>({formatSize(f.size)})</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+                        <span style={{color:C.txm,fontSize:11}}>📅 {l.date}</span>
+                        {l.hoursWorked>0&&<span style={{color:C.txm,fontSize:11}}>⏱ {l.hoursWorked} hrs</span>}
+                        {l.approved
+                          ?<Badge label="Approved" color="green" />
+                          :<Badge label="Pending" color="yellow" />
+                        }
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{display:'flex',gap:6,flexShrink:0}}>
+                    {isAdmin&&!l.approved&&(
+                      <Btn size="sm" variant="success" onClick={()=>handleApprove(l._id)}>✓ Approve</Btn>
+                    )}
+                    {(isAdmin||l.user?._id===user.id||l.user===user.id)&&(
+                      <Btn size="sm" variant="danger" onClick={()=>handleDelete(l._id)}>Delete</Btn>
+                    )}
                   </div>
                 </div>
-                <div style={{textAlign:'right',flexShrink:0,marginLeft:12}}>
-                  <div style={{color:C.tx,fontSize:12,fontWeight:600}}>{l.date}</div>
-                  {l.hoursWorked>0&&<div style={{color:C.txm,fontSize:11}}>{l.hoursWorked} hrs</div>}
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-      <Modal open={modal} onClose={()=>setModal(false)} title="Submit Work Log">
+              </Card>
+            ))}
+          </div>
+        )
+      }
+
+      {/* Add Work Log Modal */}
+      <Modal open={modal} onClose={()=>{setModal(false);setFiles([]);}} title="Submit Work Log" width={520}>
         <Input label="Date" value={form.date} onChange={v=>setForm(p=>({...p,date:v}))} type="date" required />
         <div style={{marginBottom:14}}>
           <label style={{display:'block',color:C.txs,fontSize:11,fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:5}}>What did you work on? *</label>
           <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Describe your work today..."
-            style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 13px',color:C.tx,fontSize:12,outline:'none',resize:'vertical',minHeight:80,boxSizing:'border-box',fontFamily:'inherit'}} />
+            style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 13px',color:C.tx,fontSize:12,outline:'none',resize:'vertical',minHeight:100,boxSizing:'border-box',fontFamily:'inherit'}} />
         </div>
         <Input label="Hours Worked" value={form.hoursWorked} onChange={v=>setForm(p=>({...p,hoursWorked:v}))} type="number" placeholder="e.g. 8" />
+        
+        {/* File Upload */}
+        <div style={{marginBottom:14}}>
+          <label style={{display:'block',color:C.txs,fontSize:11,fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:5}}>Attach Files (PDF, Images, Docs)</label>
+          <div onClick={()=>fileInputRef.current?.click()} style={{border:`2px dashed ${C.bdr}`,borderRadius:8,padding:'16px',textAlign:'center',cursor:'pointer',background:C.alt}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=C.acc} onMouseLeave={e=>e.currentTarget.style.borderColor=C.bdr}>
+            <div style={{fontSize:24,marginBottom:4}}>📎</div>
+            <div style={{color:C.txs,fontSize:12}}>Click to attach files</div>
+            <div style={{color:C.txm,fontSize:10,marginTop:2}}>Max 5 files, 20MB each</div>
+          </div>
+          <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif" style={{display:'none'}} onChange={e=>setFiles(Array.from(e.target.files))} />
+          {files.length>0&&(
+            <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
+              {files.map((f,i)=>(
+                <div key={i} style={{background:C.alt,borderRadius:6,padding:'4px 8px',display:'flex',alignItems:'center',gap:5,border:`1px solid ${C.bdr}`}}>
+                  <span style={{color:C.tx,fontSize:11}}>{f.name}</span>
+                  <button onClick={()=>setFiles(files.filter((_,fi)=>fi!==i))} style={{background:'none',border:'none',color:C.err,cursor:'pointer',fontSize:12}}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-          <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
-          <Btn onClick={handleSave} disabled={saving}>{saving?'Submitting...':'Submit'}</Btn>
+          <Btn variant="outline" onClick={()=>{setModal(false);setFiles([]);}}>Cancel</Btn>
+          <Btn onClick={handleSave} disabled={saving}>{saving?'Submitting...':'Submit Log'}</Btn>
         </div>
       </Modal>
     </div>
