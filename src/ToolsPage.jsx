@@ -117,31 +117,39 @@ const Calculator = () => {
 
 // ── Currency Converter ────────────────────────────────────────
 const CurrencyConverter = () => {
-  const rates = {
-    USD:1,EUR:0.92,GBP:0.79,JPY:151.2,CHF:0.90,CAD:1.36,AUD:1.52,NZD:1.63,
-    INR:83.5,PKR:278.5,BDT:110.5,LKR:305.0,NPR:133.5,MMK:2100,
-    AED:3.67,SAR:3.75,QAR:3.64,KWD:0.31,BHD:0.38,OMR:0.38,JOD:0.71,IQD:1310,IRR:42000,YER:250,
-    EGP:48.5,NGN:1580,ZAR:18.6,KES:130,GHS:15.5,ETB:56.5,TZS:2550,UGX:3750,MAD:10.1,TND:3.12,DZD:134,LYD:4.85,SDG:600,AOA:850,
-    CNY:7.24,HKD:7.82,TWD:31.5,KRW:1330,SGD:1.34,MYR:4.72,IDR:15800,THB:35.1,PHP:56.8,VND:24500,
-    BRL:5.0,MXN:17.2,ARS:900,COP:3950,CLP:950,PEN:3.75,VES:36,BOB:6.91,PYG:7300,UYU:39,
-    RUB:91.5,TRY:32.1,UAH:38.5,PLN:4.02,CZK:23.1,HUF:360,RON:4.57,SEK:10.5,NOK:10.7,DKK:6.88,
-    BGN:1.80,HRK:7.0,RSD:108,ISK:138,HUF:360,
-    ILS:3.65,AFN:70,UZS:12600,KZT:450,AZN:1.70,GEL:2.70,AMD:400,
-    FJD:2.27,PGK:3.73,WST:2.73,TOP:2.37,VUV:120,SBD:8.5,
-    XAF:600,XOF:600,XPF:110,
-  };
+  const [rates,setRates]=useState({USD:1,INR:83.5,AED:3.67,EUR:0.92,GBP:0.79});
   const [amount,setAmount]=useState('1');
   const [from,setFrom]=useState('USD');
   const [to,setTo]=useState('INR');
   const [search,setSearch]=useState('');
+  const [loading,setLoading]=useState(true);
+  const [lastUpdated,setLastUpdated]=useState('');
+
+  useEffect(()=>{
+    fetch('https://v6.exchangerate-api.com/v6/d9e9ac3fb3caa99771de67fb/latest/USD')
+      .then(r=>r.json())
+      .then(d=>{
+        if(d.result==='success'){
+          setRates(d.conversion_rates);
+          setLastUpdated(new Date(d.time_last_update_utc).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}));
+        }
+      })
+      .catch(()=>{})
+      .finally(()=>setLoading(false));
+  },[]);
+
   const result=(parseFloat(amount)||0)/rates[from]*rates[to];
   const currencies=Object.keys(rates);
   const filtered=currencies.filter(c=>c.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <Card style={{maxWidth:420}}>
-      <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>💱 Currency Converter <span style={{color:C.txs,fontSize:10,fontWeight:400}}>({currencies.length} currencies)</span></h3>
-      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search currency (e.g. INR, EUR)..." style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'7px 12px',color:C.tx,fontSize:12,outline:'none',marginBottom:10,boxSizing:'border-box',fontFamily:'inherit'}} />
+      <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>
+        💱 Currency Converter{' '}
+        <span style={{color:C.txs,fontSize:10,fontWeight:400}}>({currencies.length} currencies)</span>
+        {loading&&<span style={{color:C.warn,fontSize:10,marginLeft:8}}>Loading rates...</span>}
+      </h3>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search currency (e.g. INR, EUR, AED)..." style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'7px 12px',color:C.tx,fontSize:12,outline:'none',marginBottom:10,boxSizing:'border-box',fontFamily:'inherit'}} />
       <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
         <input value={amount} onChange={e=>setAmount(e.target.value)} type="number" style={{flex:1,background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:16,fontWeight:700,outline:'none',fontFamily:'inherit'}} />
         <select value={from} onChange={e=>setFrom(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 10px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
@@ -153,13 +161,15 @@ const CurrencyConverter = () => {
       </div>
       <div style={{background:'#0a0f1e',borderRadius:12,padding:'16px',textAlign:'center',marginBottom:10}}>
         <div style={{color:C.txs,fontSize:12,marginBottom:4}}>{amount} {from} =</div>
-        <div style={{color:C.ok,fontSize:32,fontWeight:800,fontFamily:'monospace'}}>{result.toFixed(2)}</div>
+        <div style={{color:C.ok,fontSize:32,fontWeight:800,fontFamily:'monospace'}}>{loading?'...':(result.toFixed(2))}</div>
         <div style={{color:C.tx,fontSize:14,fontWeight:700}}>{to}</div>
       </div>
       <select value={to} onChange={e=>setTo(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 10px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
         {filtered.map(c=><option key={c} value={c} style={{background:C.surf}}>{c}</option>)}
       </select>
-      <div style={{color:C.txm,fontSize:10,marginTop:8,textAlign:'center'}}>Rates approximate · For reference only</div>
+      <div style={{color:C.txm,fontSize:10,marginTop:8,textAlign:'center'}}>
+        🟢 Live rates · {lastUpdated?`Updated ${lastUpdated}`:'Updating...'}
+      </div>
     </Card>
   );
 };
