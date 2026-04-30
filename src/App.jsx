@@ -514,21 +514,221 @@ const EmployeesPage = ({user}) => {
 const AttendancePage = ({user}) => {
   const isAdmin=['admin','super_admin'].includes(user.role);
   const today=new Date().toISOString().split('T')[0];
+  const currentMonth=today.slice(0,7);
+  const [view,setView]=useState('monthly');
+  const [month,setMonth]=useState(currentMonth);
   const [date,setDate]=useState(today);
-  const [att,setAtt]=useState([]);
+  const [monthlyData,setMonthlyData]=useState([]);
+  const [dailyAtt,setDailyAtt]=useState([]);
+  const [holidays,setHolidays]=useState([]);
   const [loading,setLoading]=useState(true);
   const [toast,setToast]=useState(null);
+  const [selectedUser,setSelectedUser]=useState('');
+  const [employees,setEmployees]=useState([]);
+  const [holidayModal,setHolidayModal]=useState(false);
+  const [holidayForm,setHolidayForm]=useState({date:today,name:'',type:'holiday'});
 
   const load=useCallback(async()=>{
-    try{setLoading(true);const q=isAdmin?`?date=${date}`:`?date=${date}`;const r=await api.get(`/attendance${q}`);setAtt(r.data||[]);}
-    catch{}finally{setLoading(false);}
-  },[date,isAdmin]);
+    try{
+      setLoading(true);
+      if(view==='monthly'){
+        const q=isAdmin&&selectedUser?`?month=${month}&userId=${selectedUser}`:`?month=${month}`;
+        const [mr,hr]=await Promise.all([api.get(`/attendance/monthly${q}`),api.get(`/holidays?month=${month}`)]);
+        setMonthlyData(mr.data||[]);
+        setHolidays(hr.data||[]);
+      } else {
+        const r=await api.get(`/attendance?date=${date}`);
+        setDailyAtt(r.data||[]);
+      }
+    }catch{}finally{setLoading(false);}
+  },[view,month,date,selectedUser,isAdmin]);
+
   useEffect(()=>{load();},[load]);
+  useEffect(()=>{if(isAdmin)api.get('/users').then(r=>setEmployees(r.data||[])).catch(()=>{});},[isAdmin]);
 
   const handleCheckout=async()=>{
-    try{await api.post('/attendance/checkout');setToast({message:'Checked out',type:'success'});load();}
+    try{await api.post('/attendance/checkout');setToast({message:'Checked out successfully',type:'success'});load();}
     catch(err){setToast({message:err.message,type:'error'});}
   };
+
+  const handleAddHoliday=async()=>{
+    if(!holidayForm.name||!holidayForm.date){setToast({message:'Date and name required',type:'error'});return;}
+    try{
+      await api.post('/holidays',holidayForm);
+      setToast({message:'Holiday added',type:'success'});
+      setHolidayModal(false);
+      setHolidayForm({date:today,name:'',type:'holiday'});
+      load();
+    }catch(err){setToast({message:err.message,type:'error'});}
+  };
+
+  const handleDeleteHoliday=async(id)=>{
+    try{await api.del(`/holidays/${id}`);setToast({message:'Holiday removed',type:'info'});load();}
+    catch(err){setToast({message:err.message,type:'error'});}
+  };
+
+  const stC={present:'green',late:'yellow',absent:'red','half-day':'purple',holiday:'blue',weekend:'gray',future:'gray'};
+  const stBg={present:C.okS,late:C.warnS,absent:C.errS,'half-day':'rgba(139,92,246,.12)',holiday:C.accS,weekend:'rgba(100,116,139,.1)',future:'transparent'};
+
+  const fmt=d=>d?new Date(d).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
+
+  return (
+    <div style={{padding:28}}>
+      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
+
+      {/* Header */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18,flexWrap:'wrap',gap:10}}>
+        <div>
+          <h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Attendance</h2>
+          <p style={{color:C.txm,fontSize:12,margin:0}}>Track and manage attendance</p>
+        </div>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          {/* View toggle */}
+          <div style={{display:'flex',background:C.alt,borderRadius:8,padding:3,border:`1px solid ${C.bdr}`}}>
+            {['monthly','daily'].map(v=>(
+              <button key={v} onClick={()=>setView(v)} style={{padding:'5px 14px',borderRadius:6,border:'none',cursor:'pointer',background:view===v?C.acc:'transparent',color:view===v?'#fff':C.txs,fontSize:11,fontWeight:600,transition:'all .15s'}}>
+                {v==='monthly'?'📅 Monthly':'📋 Daily'}
+              </button>
+            ))}
+          </div>
+          {view==='monthly'&&<input type="month" value={month} onChange={e=>setMonth(e.target.value)} style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 12px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />}
+          {view==='daily'&&<input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 12px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />}
+          {isAdmin&&<Btn onClick={()=>setHolidayModal(true)} variant="ghost" size="sm">🎉 Add Holiday</Btn>}
+          {!isAdmin&&<Btn variant="danger" onClick={handleCheckout} size="sm">Check Out</Btn>}
+        </div>
+      </div>
+
+      {/* Admin employee filter */}
+      {isAdmin&&view==='monthly'&&(
+        <Card style={{marginBottom:14,padding:'12px 16px'}}>
+          <div style={{display:'flex',gap:10,alignItems:'center'}}>
+            <span style={{color:C.txs,fontSize:12}}>View:</span>
+            <select value={selectedUser} onChange={e=>setSelectedUser(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 12px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
+              <option value="">All Employees</option>
+              {employees.map(e=><option key={e._id} value={e._id}>{e.name}</option>)}
+            </select>
+          </div>
+        </Card>
+      )}
+
+      {loading?<Spinner />:view==='monthly'?(
+        <div>
+          {monthlyData.map(userData=>(
+            <div key={userData.user._id} style={{marginBottom:24}}>
+              {/* Employee header + summary */}
+              {isAdmin&&!selectedUser&&(
+                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+                  <Avatar name={userData.user.name} size={32} />
+                  <div>
+                    <div style={{color:C.tx,fontWeight:700,fontSize:14}}>{userData.user.name}</div>
+                    <div style={{color:C.txs,fontSize:11}}>{userData.user.jobTitle||userData.user.email}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Summary stats */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:14}}>
+                <StatCard icon="✅" label="Present" value={userData.summary.present} color={C.ok} />
+                <StatCard icon="⏰" label="Late" value={userData.summary.late} color={C.warn} />
+                <StatCard icon="❌" label="Absent" value={userData.summary.absent} color={C.err} />
+                <StatCard icon="🎉" label="Holidays" value={userData.summary.holiday} color={C.acc} />
+              </div>
+
+              {/* Calendar grid */}
+              <Card style={{padding:16}}>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4,marginBottom:8}}>
+                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>(
+                    <div key={d} style={{textAlign:'center',color:C.txs,fontSize:10,fontWeight:700,padding:'4px 0'}}>{d}</div>
+                  ))}
+                </div>
+                {/* Empty cells for first day offset */}
+                <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4}}>
+                  {Array(new Date(`${month}-01`).getDay()).fill(null).map((_,i)=>(
+                    <div key={`empty-${i}`} />
+                  ))}
+                  {userData.days.map(day=>(
+                    <div key={day.date} title={`${day.date}${day.note?'\n'+day.note:''}`} style={{background:stBg[day.status]||'transparent',borderRadius:8,padding:'6px 4px',textAlign:'center',cursor:'default',border:`1px solid ${day.status==='future'?C.bdr:'transparent'}`}}>
+                      <div style={{color:day.status==='future'?C.txm:C.tx,fontSize:12,fontWeight:700}}>{day.day}</div>
+                      <div style={{fontSize:9,color:day.status==='present'?C.ok:day.status==='late'?C.warn:day.status==='absent'?C.err:day.status==='holiday'?C.acc:C.txm,fontWeight:600,textTransform:'uppercase',marginTop:2}}>
+                        {day.status==='future'?'':day.status==='weekend'?'Off':day.status==='present'?'In':day.status==='late'?'Late':day.status==='absent'?'Out':day.status==='holiday'?'Hol':''}
+                      </div>
+                      {day.checkIn&&<div style={{fontSize:8,color:C.txs,marginTop:1}}>{fmt(day.checkIn)}</div>}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* Holidays list */}
+              {holidays.length>0&&(
+                <Card style={{marginTop:12,padding:12}}>
+                  <div style={{color:C.tx,fontSize:12,fontWeight:700,marginBottom:8}}>🎉 Holidays this month</div>
+                  {holidays.map(h=>(
+                    <div key={h._id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:`1px solid ${C.bdr}`}}>
+                      <div>
+                        <span style={{color:C.tx,fontSize:12,fontWeight:600}}>{h.name}</span>
+                        <span style={{color:C.txs,fontSize:11,marginLeft:8}}>{h.date}</span>
+                      </div>
+                      {isAdmin&&<Btn size="sm" variant="danger" onClick={()=>handleDeleteHoliday(h._id)}>Remove</Btn>}
+                    </div>
+                  ))}
+                </Card>
+              )}
+            </div>
+          ))}
+        </div>
+      ):(
+        /* Daily view */
+        <div>
+          {isAdmin&&(
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:18}}>
+              <StatCard icon="✅" label="Present" value={dailyAtt.filter(a=>['present','late'].includes(a.status)).length} color={C.ok} />
+              <StatCard icon="⏰" label="Late" value={dailyAtt.filter(a=>a.status==='late').length} color={C.warn} />
+              <StatCard icon="❌" label="Absent" value={dailyAtt.filter(a=>a.status==='absent').length} color={C.err} />
+            </div>
+          )}
+          <Card style={{padding:0}}>
+            <table style={{width:'100%',borderCollapse:'collapse'}}>
+              <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
+                {[...(isAdmin?['Employee']:[]),'Date','Check In','Check Out','Hours','Status','Note'].map(h=>(
+                  <th key={h} style={{padding:'11px 16px',textAlign:'left',color:C.txm,fontSize:10,fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase'}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {dailyAtt.length===0
+                  ?<tr><td colSpan={7} style={{padding:32,textAlign:'center',color:C.txm}}>No records for {date}</td></tr>
+                  :dailyAtt.map((a,i)=>(
+                    <tr key={a._id} style={{borderBottom:i<dailyAtt.length-1?`1px solid ${C.bdr}`:'none'}}
+                      onMouseEnter={e=>e.currentTarget.style.background=C.alt}
+                      onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                      {isAdmin&&<td style={{padding:'11px 16px'}}><div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={a.user?.name||'?'} size={24} /><span style={{color:C.tx,fontSize:12}}>{a.user?.name||'—'}</span></div></td>}
+                      <td style={{padding:'11px 16px',color:C.txs,fontSize:12}}>{a.date}</td>
+                      <td style={{padding:'11px 16px',color:C.tx,fontSize:12,fontWeight:600}}>{fmt(a.checkIn)}</td>
+                      <td style={{padding:'11px 16px',color:C.txs,fontSize:12}}>{fmt(a.checkOut)}</td>
+                      <td style={{padding:'11px 16px',color:C.tx,fontSize:12}}>{a.totalHours?a.totalHours.toFixed(1)+' hrs':'Active'}</td>
+                      <td style={{padding:'11px 16px'}}><Badge label={a.status} color={stC[a.status]||'gray'} /></td>
+                      <td style={{padding:'11px 16px',color:C.txs,fontSize:11}}>{a.note||'—'}</td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      )}
+
+      {/* Add Holiday Modal */}
+      <Modal open={holidayModal} onClose={()=>setHolidayModal(false)} title="Add Holiday">
+        <Input label="Date" value={holidayForm.date} onChange={v=>setHolidayForm(p=>({...p,date:v}))} type="date" required />
+        <Input label="Holiday Name" value={holidayForm.name} onChange={v=>setHolidayForm(p=>({...p,name:v}))} placeholder="e.g. Eid Al Fitr" required />
+        <Select label="Type" value={holidayForm.type} onChange={v=>setHolidayForm(p=>({...p,type:v}))} options={[{value:'holiday',label:'Holiday'},{value:'workday',label:'Working Day'}]} />
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+          <Btn variant="outline" onClick={()=>setHolidayModal(false)}>Cancel</Btn>
+          <Btn onClick={handleAddHoliday}>Add Holiday</Btn>
+        </div>
+      </Modal>
+    </div>
+  );
+};
 
   const stC={present:'green',late:'yellow',absent:'red','half-day':'purple'};
   const stats={present:att.filter(a=>['present','late'].includes(a.status)).length,late:att.filter(a=>a.status==='late').length,absent:att.filter(a=>a.status==='absent').length};
