@@ -31,9 +31,7 @@ const Calculator = () => {
     if (val==='⌫'){setDisplay(d=>d.length>1?d.slice(0,-1):'0');return;}
     if (val==='%'){setDisplay(d=>String(parseFloat(d)/100));return;}
     if (val==='±'){setDisplay(d=>String(-parseFloat(d)));return;}
-    if (['+','-','×','÷'].includes(val)){
-      setPrev(parseFloat(display));setOp(val);setNewNum(true);return;
-    }
+    if (['+','-','×','÷'].includes(val)){setPrev(parseFloat(display));setOp(val);setNewNum(true);return;}
     if (val==='='){
       if (prev===null||!op)return;
       const cur=parseFloat(display);
@@ -41,10 +39,7 @@ const Calculator = () => {
       setDisplay(String(parseFloat(res.toFixed(10))));
       setPrev(null);setOp(null);setNewNum(true);return;
     }
-    if (val==='.'){
-      if (newNum){setDisplay('0.');setNewNum(false);return;}
-      if (!display.includes('.'))setDisplay(d=>d+'.');return;
-    }
+    if (val==='.'){if(newNum){setDisplay('0.');setNewNum(false);return;}if(!display.includes('.'))setDisplay(d=>d+'.');return;}
     setDisplay(newNum?val:display==='0'?val:display+val);
     setNewNum(false);
   };
@@ -88,20 +83,19 @@ const Calculator = () => {
 
 // ── Currency Converter ────────────────────────────────────────
 const CurrencyConverter = () => {
-  const rates = { USD:1, INR:83.5, AED:3.67, EUR:0.92, GBP:0.79, JPY:151.2, SGD:1.34, CAD:1.36, AUD:1.52, CNY:7.24 };
+  const rates = { USD:1, INR:83.5, AED:3.67, EUR:0.92, GBP:0.79, JPY:151.2, SGD:1.34, CAD:1.36, AUD:1.52, CNY:7.24, SAR:3.75, QAR:3.64, KWD:0.31, BHD:0.38, OMR:0.38, PKR:278.5, BDT:110.5, LKR:305.0, MYR:4.72, IDR:15800, THB:35.1, PHP:56.8, VND:24500, KRW:1330, HKD:7.82, TWD:31.5, MXN:17.2, BRL:5.0, ZAR:18.6, NGN:1580, EGP:48.5, TRY:32.1, RUB:91.5, CHF:0.90, SEK:10.5, NOK:10.7, DKK:6.88, PLN:4.02, CZK:23.1, HUF:360, RON:4.57, BGN:1.80, HRK:7.0, RSD:108, UAH:38.5, NZD:1.63, FJD:2.27, PGK:3.73 };
   const [amount,setAmount]=useState('1');
   const [from,setFrom]=useState('USD');
   const [to,setTo]=useState('INR');
   const result = (parseFloat(amount)||0) / rates[from] * rates[to];
   const currencies = Object.keys(rates);
-  const flags = {USD:'🇺🇸',INR:'🇮🇳',AED:'🇦🇪',EUR:'🇪🇺',GBP:'🇬🇧',JPY:'🇯🇵',SGD:'🇸🇬',CAD:'🇨🇦',AUD:'🇦🇺',CNY:'🇨🇳'};
   return (
     <Card>
       <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>💱 Currency Converter</h3>
       <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12}}>
         <input value={amount} onChange={e=>setAmount(e.target.value)} type="number" style={{flex:1,background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:14,fontWeight:700,outline:'none',fontFamily:'inherit'}} />
         <select value={from} onChange={e=>setFrom(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 10px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
-          {currencies.map(c=><option key={c} value={c} style={{background:C.surf}}>{flags[c]} {c}</option>)}
+          {currencies.map(c=><option key={c} value={c} style={{background:C.surf}}>{c}</option>)}
         </select>
       </div>
       <div style={{textAlign:'center',marginBottom:12}}>
@@ -113,9 +107,9 @@ const CurrencyConverter = () => {
         <div style={{color:C.tx,fontSize:13,fontWeight:600}}>{to}</div>
       </div>
       <select value={to} onChange={e=>setTo(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 10px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
-        {currencies.map(c=><option key={c} value={c} style={{background:C.surf}}>{flags[c]} {c}</option>)}
+        {currencies.map(c=><option key={c} value={c} style={{background:C.surf}}>{c}</option>)}
       </select>
-      <div style={{color:C.txm,fontSize:10,marginTop:8,textAlign:'center'}}>Rates approximate · Last updated daily</div>
+      <div style={{color:C.txm,fontSize:10,marginTop:8,textAlign:'center'}}>Rates approximate · Updated regularly</div>
     </Card>
   );
 };
@@ -123,9 +117,9 @@ const CurrencyConverter = () => {
 // ── Unit Converter ────────────────────────────────────────────
 const UnitConverter = () => {
   const cats = {
-    Weight:   {KG:1,LB:2.205,OZ:35.274,G:1000,TON:0.001},
-    Length:   {M:1,KM:0.001,CM:100,MM:1000,INCH:39.37,FT:3.281,MILE:0.000621},
-    Temperature: null,
+    Weight:{KG:1,LB:2.205,OZ:35.274,G:1000,TON:0.001},
+    Length:{M:1,KM:0.001,CM:100,MM:1000,INCH:39.37,FT:3.281,MILE:0.000621},
+    Temperature:null,
   };
   const [cat,setCat]=useState('Weight');
   const [val,setVal]=useState('1');
@@ -135,18 +129,18 @@ const UnitConverter = () => {
   const convert = () => {
     if (cat==='Temperature') {
       const v=parseFloat(val)||0;
-      if (from==='C'&&to==='F') return (v*9/5+32).toFixed(2);
-      if (from==='F'&&to==='C') return ((v-32)*5/9).toFixed(2);
-      if (from==='C'&&to==='K') return (v+273.15).toFixed(2);
-      if (from==='K'&&to==='C') return (v-273.15).toFixed(2);
-      if (from==='F'&&to==='K') return ((v-32)*5/9+273.15).toFixed(2);
-      if (from==='K'&&to==='F') return ((v-273.15)*9/5+32).toFixed(2);
+      if(from==='C'&&to==='F')return(v*9/5+32).toFixed(2);
+      if(from==='F'&&to==='C')return((v-32)*5/9).toFixed(2);
+      if(from==='C'&&to==='K')return(v+273.15).toFixed(2);
+      if(from==='K'&&to==='C')return(v-273.15).toFixed(2);
+      if(from==='F'&&to==='K')return((v-32)*5/9+273.15).toFixed(2);
+      if(from==='K'&&to==='F')return((v-273.15)*9/5+32).toFixed(2);
       return v.toFixed(2);
     }
-    const r=cats[cat]; return ((parseFloat(val)||0)/r[from]*r[to]).toFixed(4);
+    const r=cats[cat]; return((parseFloat(val)||0)/r[from]*r[to]).toFixed(4);
   };
 
-  const units = cat==='Temperature'?['C','F','K']:Object.keys(cats[cat]||{});
+  const units=cat==='Temperature'?['C','F','K']:Object.keys(cats[cat]||{});
   return (
     <Card>
       <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:12}}>📐 Unit Converter</h3>
@@ -177,27 +171,40 @@ const NotesApp = () => {
   const [active,setActive]=useState(null);
   const [title,setTitle]=useState('');
   const [body,setBody]=useState('');
+  const [saved,setSaved]=useState(false);
 
   const save = () => {
     if (!title.trim()) return;
-    const note = { id: active||Date.now().toString(), title, body, updatedAt: new Date().toISOString() };
+    const id = active||Date.now().toString();
+    const note = { id, title, body, updatedAt: new Date().toISOString() };
     const updated = active ? notes.map(n=>n.id===active?note:n) : [note,...notes];
-    setNotes(updated); localStorage.setItem('ems_notes', JSON.stringify(updated));
+    setNotes(updated);
+    localStorage.setItem('ems_notes', JSON.stringify(updated));
+    setActive(id);
+    setSaved(true);
+    setTimeout(()=>setSaved(false),2000);
   };
 
-  const del = (id) => { const n=notes.filter(n=>n.id!==id); setNotes(n); localStorage.setItem('ems_notes',JSON.stringify(n)); if(active===id){setActive(null);setTitle('');setBody('');} };
+  const del = (id) => {
+    const n=notes.filter(n=>n.id!==id);
+    setNotes(n);
+    localStorage.setItem('ems_notes',JSON.stringify(n));
+    if(active===id){setActive(null);setTitle('');setBody('');}
+  };
+
+  const newNote = () => { setActive(null);setTitle('');setBody('');setSaved(false); };
 
   return (
     <div style={{display:'grid',gridTemplateColumns:'220px 1fr',gap:14,height:380}}>
       <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:12,overflow:'hidden',display:'flex',flexDirection:'column'}}>
         <div style={{padding:'10px 12px',borderBottom:`1px solid ${C.bdr}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <span style={{color:C.tx,fontSize:12,fontWeight:700}}>📝 Notes</span>
-          <button onClick={()=>{setActive(null);setTitle('');setBody('');}} style={{background:C.acc,border:'none',borderRadius:6,padding:'3px 9px',color:'#fff',cursor:'pointer',fontSize:10,fontWeight:600}}>+ New</button>
+          <span style={{color:C.tx,fontSize:12,fontWeight:700}}>📝 Notes ({notes.length})</span>
+          <button onClick={newNote} style={{background:C.acc,border:'none',borderRadius:6,padding:'3px 9px',color:'#fff',cursor:'pointer',fontSize:10,fontWeight:600}}>+ New</button>
         </div>
         <div style={{flex:1,overflowY:'auto'}}>
           {notes.length===0?<div style={{padding:16,color:C.txm,fontSize:12,textAlign:'center'}}>No notes yet</div>
           :notes.map(n=>(
-            <div key={n.id} onClick={()=>{setActive(n.id);setTitle(n.title);setBody(n.body);}} style={{padding:'9px 12px',borderBottom:`1px solid ${C.bdr}`,cursor:'pointer',background:active===n.id?C.accS:'transparent'}}
+            <div key={n.id} onClick={()=>{setActive(n.id);setTitle(n.title);setBody(n.body);setSaved(false);}} style={{padding:'9px 12px',borderBottom:`1px solid ${C.bdr}`,cursor:'pointer',background:active===n.id?C.accS:'transparent'}}
               onMouseEnter={e=>{if(active!==n.id)e.currentTarget.style.background=C.alt;}} onMouseLeave={e=>{if(active!==n.id)e.currentTarget.style.background='transparent';}}>
               <div style={{color:C.tx,fontSize:12,fontWeight:600,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{n.title}</div>
               <div style={{color:C.txs,fontSize:10}}>{new Date(n.updatedAt).toLocaleDateString()}</div>
@@ -208,9 +215,10 @@ const NotesApp = () => {
       <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:12,padding:14,display:'flex',flexDirection:'column',gap:8}}>
         <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Note title..." style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:14,fontWeight:600,outline:'none',fontFamily:'inherit'}} />
         <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Write your note here..." style={{flex:1,background:C.bg,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'10px 12px',color:C.tx,fontSize:12,outline:'none',resize:'none',lineHeight:1.6,fontFamily:'inherit'}} />
-        <div style={{display:'flex',gap:7}}>
+        <div style={{display:'flex',gap:7,alignItems:'center'}}>
           <Btn onClick={save} disabled={!title.trim()}>💾 Save</Btn>
           {active&&<Btn variant="danger" onClick={()=>del(active)}>🗑 Delete</Btn>}
+          {saved&&<span style={{color:C.ok,fontSize:11,fontWeight:600}}>✅ Saved!</span>}
         </div>
       </div>
     </div>
@@ -219,10 +227,9 @@ const NotesApp = () => {
 
 // ── Web Tools ─────────────────────────────────────────────────
 const WebTools = () => {
-  const [url,setUrl]=useState('');
   const [searchQ,setSearchQ]=useState('');
   const tools = [
-    {icon:'🔍',name:'Google Search',desc:'Search the web',action:()=>window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQ)}`,'_blank')},
+    {icon:'🤖',name:'ChatGPT',desc:'AI Assistant',action:()=>window.open('https://chat.openai.com','_blank')},
     {icon:'📧',name:'Gmail',desc:'Company email',action:()=>window.open('https://mail.google.com','_blank')},
     {icon:'📁',name:'Google Drive',desc:'Shared documents',action:()=>window.open('https://drive.google.com','_blank')},
     {icon:'📅',name:'Google Meet',desc:'Start or join meeting',action:()=>window.open('https://meet.google.com','_blank')},
@@ -232,8 +239,6 @@ const WebTools = () => {
     {icon:'🐦',name:'Twitter / X',desc:'Social media',action:()=>window.open('https://x.com','_blank')},
     {icon:'💼',name:'LinkedIn',desc:'Professional network',action:()=>window.open('https://linkedin.com','_blank')},
     {icon:'💬',name:'WhatsApp Web',desc:'Messaging',action:()=>window.open('https://web.whatsapp.com','_blank')},
-    {icon:'📦',name:'Notion',desc:'Project management',action:()=>window.open('https://notion.so','_blank')},
-    {icon:'🎯',name:'Trello',desc:'Task boards',action:()=>window.open('https://trello.com','_blank')},
   ];
   return (
     <div>
