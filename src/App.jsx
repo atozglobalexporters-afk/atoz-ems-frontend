@@ -1081,50 +1081,191 @@ const OrdersPage = () => {
 const AnalyticsPage = ({user}) => {
   const [data,setData]=useState(null);
   const [attData,setAttData]=useState([]);
+  const [monthlyAtt,setMonthlyAtt]=useState([]);
+  const [orderStats,setOrderStats]=useState([]);
+  const [salaryStats,setSalaryStats]=useState([]);
   const [loading,setLoading]=useState(true);
+  const [month,setMonth]=useState(new Date().toISOString().slice(0,7));
+
   useEffect(()=>{
-    Promise.all([api.get('/dashboard'),api.get('/attendance/summary')]).then(([d,a])=>{setData(d.data);setAttData([{name:'Present',value:a.data.present},{name:'Late',value:a.data.late},{name:'Absent',value:a.data.absent},{name:'Half Day',value:a.data.halfDay}]);}).catch(()=>{}).finally(()=>setLoading(false));
-  },[]);
-  if (loading) return <Spinner />;
-  const COLORS=[C.ok,C.warn,C.err,C.purple];
+    const load=async()=>{
+      try{
+        const [d,a,att,sal,ord]=await Promise.all([
+          api.get('/dashboard'),
+          api.get('/attendance/summary'),
+          api.get(`/attendance/monthly?month=${month}`),
+          api.get('/salaries'),
+          api.get('/orders'),
+        ]);
+        setData(d.data);
+        setAttData([
+          {name:'Present',value:a.data.present||0},
+          {name:'Late',value:a.data.late||0},
+          {name:'Absent',value:a.data.absent||0},
+          {name:'Half Day',value:a.data.halfDay||0},
+        ]);
+        // Build monthly attendance bar chart data
+        if(att.data&&att.data.length>0){
+          const summary=att.data[0]?.summary||{};
+          setMonthlyAtt([
+            {name:'Present',value:summary.present||0,fill:C.ok},
+            {name:'Late',value:summary.late||0,fill:C.warn},
+            {name:'Absent',value:summary.absent||0,fill:C.err},
+            {name:'Holiday',value:summary.holiday||0,fill:C.acc},
+          ]);
+        }
+        // Salary stats
+        const salaries=sal.data||[];
+        setSalaryStats([
+          {name:'Paid',value:salaries.filter(s=>s.status==='paid').length,fill:C.ok},
+          {name:'Pending',value:salaries.filter(s=>s.status==='pending').length,fill:C.warn},
+          {name:'Due',value:salaries.filter(s=>s.status==='due').length,fill:C.err},
+        ]);
+        // Order stats
+        const orders=ord.data||[];
+        const oStats={draft:0,confirmed:0,shipped:0,delivered:0,cancelled:0};
+        orders.forEach(o=>oStats[o.status]=(oStats[o.status]||0)+1);
+        setOrderStats(Object.entries(oStats).map(([name,value])=>({name:name.charAt(0).toUpperCase()+name.slice(1),value})));
+      }catch{}finally{setLoading(false);}
+    };
+    load();
+  },[month]);
+
+  if(loading) return <Spinner />;
+  const COLORS=[C.ok,C.warn,C.err,C.purple,C.acc,C.teal];
+
   return (
     <div style={{padding:28}}>
-      <h2 style={{color:C.tx,fontSize:19,fontWeight:800,marginBottom:20}}>Analytics</h2>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:14,marginBottom:22}}>
-        <StatCard icon="👥" label="Employees" value={data?.users} color={C.acc} />
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:22}}>
+        <h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:0}}>📊 Analytics</h2>
+        <input type="month" value={month} onChange={e=>setMonth(e.target.value)} style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 12px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />
+      </div>
+
+      {/* Top Stats */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:14,marginBottom:22}}>
+        <StatCard icon="👥" label="Total Employees" value={data?.users} color={C.acc} />
         <StatCard icon="✅" label="Present Today" value={data?.presentToday} color={C.ok} />
         <StatCard icon="💵" label="Pending Salaries" value={data?.pendingSalaries} color={C.warn} />
         <StatCard icon="📦" label="Total Orders" value={data?.totalOrders} color={C.purple} />
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
+
+      {/* Row 1: Attendance Pie + Monthly Bar */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18,marginBottom:18}}>
         <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>Attendance This Month</h3>
+          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>📅 Attendance This Month</h3>
+          {attData.every(d=>d.value===0)
+            ?<div style={{textAlign:'center',color:C.txm,padding:40,fontSize:12}}>No attendance data yet</div>
+            :<ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={attData} cx="50%" cy="50%" outerRadius={75} innerRadius={35} dataKey="value" label={({name,value})=>value>0?`${name}: ${value}`:''}>
+                  {attData.map((_,i)=><Cell key={i} fill={COLORS[i]} />)}
+                </Pie>
+                <Tooltip contentStyle={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tx}} />
+              </PieChart>
+            </ResponsiveContainer>
+          }
+          <div style={{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center',marginTop:8}}>
+            {attData.map((d,i)=>(
+              <div key={d.name} style={{display:'flex',alignItems:'center',gap:4}}>
+                <div style={{width:8,height:8,borderRadius:'50%',background:COLORS[i]}} />
+                <span style={{color:C.txs,fontSize:11}}>{d.name}: <strong style={{color:C.tx}}>{d.value}</strong></span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>📊 Monthly Breakdown</h3>
           <ResponsiveContainer width="100%" height={200}>
-            <PieChart><Pie data={attData} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({name,value})=>`${name}: ${value}`}>
-              {attData.map((_,i)=><Cell key={i} fill={COLORS[i]} />)}
-            </Pie><Tooltip /></PieChart>
+            <BarChart data={monthlyAtt} barSize={32}>
+              <XAxis dataKey="name" tick={{fill:C.txs,fontSize:11}} axisLine={false} tickLine={false} />
+              <YAxis tick={{fill:C.txs,fontSize:10}} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tx}} />
+              <Bar dataKey="value" radius={[6,6,0,0]}>
+                {monthlyAtt.map((entry,i)=><Cell key={i} fill={entry.fill} />)}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         </Card>
+      </div>
+
+      {/* Row 2: Salary Stats + Order Stats */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18,marginBottom:18}}>
         <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>Summary</h3>
-          {[
-            {label:'Total Employees',val:data?.users,color:C.acc},
-            {label:'Present Today',val:data?.presentToday,color:C.ok},
-            {label:'Pending Salaries',val:data?.pendingSalaries,color:C.warn},
-            {label:'Total Orders',val:data?.totalOrders,color:C.purple},
-          ].map(s=>(
-            <div key={s.label} style={{marginBottom:12}}>
-              <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-                <span style={{color:C.txs,fontSize:12}}>{s.label}</span>
-                <span style={{color:s.color,fontWeight:700,fontSize:12}}>{s.val??0}</span>
+          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>💵 Salary Status</h3>
+          {salaryStats.every(d=>d.value===0)
+            ?<div style={{textAlign:'center',color:C.txm,padding:40,fontSize:12}}>No salary records yet</div>
+            :<>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={salaryStats} barSize={40}>
+                  <XAxis dataKey="name" tick={{fill:C.txs,fontSize:11}} axisLine={false} tickLine={false} />
+                  <YAxis tick={{fill:C.txs,fontSize:10}} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tx}} />
+                  <Bar dataKey="value" radius={[6,6,0,0]}>
+                    {salaryStats.map((entry,i)=><Cell key={i} fill={entry.fill} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div style={{display:'flex',gap:14,justifyContent:'center',marginTop:8}}>
+                {salaryStats.map(s=>(
+                  <div key={s.name} style={{textAlign:'center'}}>
+                    <div style={{color:s.fill,fontSize:20,fontWeight:800}}>{s.value}</div>
+                    <div style={{color:C.txs,fontSize:11}}>{s.name}</div>
+                  </div>
+                ))}
               </div>
-              <div style={{background:C.bdr,borderRadius:3,height:4,overflow:'hidden'}}>
-                <div style={{width:`${Math.min(100,(s.val||0)/Math.max(1,data?.users||1)*100)}%`,height:'100%',background:s.color,borderRadius:3}} />
+            </>
+          }
+        </Card>
+
+        <Card>
+          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>📦 Order Status</h3>
+          {orderStats.every(d=>d.value===0)
+            ?<div style={{textAlign:'center',color:C.txm,padding:40,fontSize:12}}>No orders yet</div>
+            :<>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={orderStats.filter(d=>d.value>0)} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({name,value})=>`${name}: ${value}`}>
+                    {orderStats.map((_,i)=><Cell key={i} fill={COLORS[i]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tx}} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',marginTop:8}}>
+                {orderStats.filter(d=>d.value>0).map((d,i)=>(
+                  <div key={d.name} style={{display:'flex',alignItems:'center',gap:4}}>
+                    <div style={{width:8,height:8,borderRadius:'50%',background:COLORS[i]}} />
+                    <span style={{color:C.txs,fontSize:11}}>{d.name}: <strong style={{color:C.tx}}>{d.value}</strong></span>
+                  </div>
+                ))}
+              </div>
+            </>
+          }
+        </Card>
+      </div>
+
+      {/* Row 3: Quick Summary */}
+      <Card>
+        <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>📋 Quick Summary</h3>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}>
+          {[
+            {label:'Total Employees',val:data?.users,color:C.acc,icon:'👥'},
+            {label:'Present Today',val:data?.presentToday,color:C.ok,icon:'✅'},
+            {label:'Pending Salaries',val:data?.pendingSalaries,color:C.warn,icon:'⏳'},
+            {label:'Total Orders',val:data?.totalOrders,color:C.purple,icon:'📦'},
+          ].map(s=>(
+            <div key={s.label} style={{marginBottom:8}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <span style={{color:C.txs,fontSize:12}}>{s.icon} {s.label}</span>
+                <span style={{color:s.color,fontWeight:800,fontSize:14}}>{s.val??0}</span>
+              </div>
+              <div style={{background:C.bdr,borderRadius:4,height:5,overflow:'hidden'}}>
+                <div style={{width:`${Math.min(100,(s.val||0)/Math.max(1,data?.users||1)*100)}%`,height:'100%',background:s.color,borderRadius:4,transition:'width .5s'}} />
               </div>
             </div>
           ))}
-        </Card>
-      </div>
+        </div>
+      </Card>
     </div>
   );
 };
