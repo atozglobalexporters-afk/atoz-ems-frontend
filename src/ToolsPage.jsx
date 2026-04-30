@@ -1,5 +1,5 @@
 // ToolsPage.jsx — Super App Tools Hub
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const C = {
   bg:'#0f172a', surf:'#1e293b', alt:'#334155', bdr:'#334155',
