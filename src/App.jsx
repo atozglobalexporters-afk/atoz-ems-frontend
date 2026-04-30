@@ -1092,6 +1092,7 @@ export default function App() {
   const [toast,  setToast]  = useState(null);
   const [notifs, setNotifs] = useState([]);
   const [unread, setUnread] = useState(0);
+  const [chatUnread, setChatUnread] = useState(0);
   const [company,setCompany]= useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const socketRef = useRef(null);
@@ -1105,12 +1106,26 @@ export default function App() {
 
   const isAdminRole=r=>['admin','super_admin'].includes(r);
 
-  useEffect(()=>{
+  useEffect(()=>{ 
     if (!user) return;
     const token=localStorage.getItem('ems_token');
     const socket=io(API,{auth:{token},transports:['websocket','polling'],reconnection:true});
     socketRef.current=socket;
-    socket.on('notification',data=>{setNotifs(p=>[{_id:Date.now().toString(),title:data.title,message:data.message,read:false,createdAt:new Date().toISOString()},...p]);setUnread(c=>c+1);});
+    socket.on('notification',data=>{
+      setNotifs(p=>[{_id:Date.now().toString(),title:data.title,message:data.message,read:false,createdAt:new Date().toISOString()},...p]);
+      setUnread(c=>c+1);
+    });
+    socket.on('message:new', msg => {
+      if (msg.sender?._id !== user.id) {
+        setNotifs(p=>[{_id:Date.now().toString(),title:`💬 New message from ${msg.sender?.name||'Someone'}`,message:msg.content||'Sent a file',read:false,createdAt:new Date().toISOString()},...p]);
+        setUnread(c=>c+1);
+        setChatUnread(c=>c+1);
+        if (Notification.permission==='granted') {
+          new Notification(`💬 ${msg.sender?.name||'Someone'}`,{body:msg.content||'Sent a file',icon:'/favicon.ico'});
+        }
+      }
+  
+    });
     socket.on('online_users', users => setOnlineUsers(users));
     api.get('/notifications').then(d=>{setNotifs(d.data||[]);setUnread(d.unread||0);}).catch(()=>{});
     return()=>{socket.disconnect();};
@@ -1121,6 +1136,7 @@ export default function App() {
     setTab(isAdminRole(userData.role)?'dashboard':'my-dashboard');
     api.get('/company').then(d=>setCompany(d.data)).catch(()=>{});
     setToast({message:`Welcome, ${userData.name.split(' ')[0]}!`,type:'success'});
+    if(Notification.permission==='default') Notification.requestPermission();
   };
 
   const handleLogout=async()=>{
