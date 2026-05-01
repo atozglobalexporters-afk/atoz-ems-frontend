@@ -730,54 +730,7 @@ const AttendancePage = ({user}) => {
   );
 };
 
-  const stC={present:'green',late:'yellow',absent:'red','half-day':'purple'};
-  const stats={present:att.filter(a=>['present','late'].includes(a.status)).length,late:att.filter(a=>a.status==='late').length,absent:att.filter(a=>a.status==='absent').length};
 
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-        <div><h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Attendance</h2><p style={{color:C.txm,fontSize:12,margin:0}}>Track check-in/out</p></div>
-        <div style={{display:'flex',gap:9,alignItems:'center'}}>
-          <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'7px 13px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />
-          {!isAdmin&&<Btn variant="danger" onClick={handleCheckout}>Check Out</Btn>}
-        </div>
-      </div>
-      {isAdmin&&(
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:18}}>
-          <StatCard icon="✅" label="Present" value={stats.present} color={C.ok} />
-          <StatCard icon="⏰" label="Late" value={stats.late} color={C.warn} />
-          <StatCard icon="❌" label="Absent" value={stats.absent} color={C.err} />
-        </div>
-      )}
-      {loading?<Spinner />:(
-        <Card style={{padding:0}}>
-          <table style={{width:'100%',borderCollapse:'collapse'}}>
-            <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
-              {[...(isAdmin?['Employee']:[]),'Date','Check In','Check Out','Hours','Status'].map(h=>(
-                <th key={h} style={{padding:'11px 16px',textAlign:'left',color:C.txm,fontSize:10,fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase'}}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {att.length===0?<tr><td colSpan={6} style={{padding:32,textAlign:'center',color:C.txm}}>No records for {date}</td></tr>
-              :att.map((a,i)=>{
-                const fmt=d=>d?new Date(d).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—';
-                return <tr key={a._id} style={{borderBottom:i<att.length-1?`1px solid ${C.bdr}`:'none'}}
-                  onMouseEnter={e=>e.currentTarget.style.background=C.alt} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                  {isAdmin&&<td style={{padding:'11px 16px'}}><div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={a.user?.name||'?'} size={24} /><span style={{color:C.tx,fontSize:12}}>{a.user?.name||'—'}</span></div></td>}
-                  <td style={{padding:'11px 16px',color:C.txs,fontSize:12}}>{a.date}</td>
-                  <td style={{padding:'11px 16px',color:C.tx,fontSize:12,fontWeight:600}}>{fmt(a.checkIn)}</td>
-                  <td style={{padding:'11px 16px',color:C.txs,fontSize:12}}>{fmt(a.checkOut)}</td>
-                  <td style={{padding:'11px 16px',color:C.tx,fontSize:12}}>{a.totalHours?a.totalHours.toFixed(1)+' hrs':'Active'}</td>
-                  <td style={{padding:'11px 16px'}}><Badge label={a.status} color={stC[a.status]||'gray'} /></td>
-                </tr>;
-              })}
-            </tbody>
-          </table>
-        </Card>
-      )}
-    </div>
-  );
 
 // ── Work Logs ─────────────────────────────────────────────────
 const WorkLogsPage = ({user}) => {
