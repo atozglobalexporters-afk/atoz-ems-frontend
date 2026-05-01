@@ -1389,20 +1389,29 @@ const CompanyPage = () => {
           <Input label="Email" value={company.email} onChange={v=>setCompany(p=>({...p,email:v}))} type="email" placeholder="info@company.com" />
           <Input label="Phone" value={company.phone} onChange={v=>setCompany(p=>({...p,phone:v}))} placeholder="+91..." />
         </Card>
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>Attendance Settings</h3>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-            <Input label="Office Start Hour" value={company.officeStartHour} onChange={v=>setCompany(p=>({...p,officeStartHour:parseInt(v)}))} type="number" placeholder="9" />
-            <Input label="Start Minute" value={company.officeStartMinute} onChange={v=>setCompany(p=>({...p,officeStartMinute:parseInt(v)}))} type="number" placeholder="0" />
-          </div>
-          <Input label="Grace Period (minutes)" value={company.gracePeriodMinutes} onChange={v=>setCompany(p=>({...p,gracePeriodMinutes:parseInt(v)}))} type="number" placeholder="15" />
-          <div style={{background:C.accS,borderRadius:8,padding:'10px 13px',fontSize:12,color:C.acc,marginBottom:14}}>
-            ℹ Check-in before {company.officeStartHour}:{String(company.officeStartMinute).padStart(2,'0')} AM = Present<br />
-            Check-in before {company.officeStartHour}:{String(company.officeStartMinute+company.gracePeriodMinutes).padStart(2,'0')} AM = Late<br />
-            After that = Absent
-          </div>
-          <Input label="Auto Logout Hours" value={company.autoLogoutHours||10} onChange={v=>setCompany(p=>({...p,autoLogoutHours:parseInt(v)}))} type="number" placeholder="10" />
-        </Card>
+       <Card>
+  <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>⏰ Attendance Settings</h3>
+  <div style={{marginBottom:14}}>
+    <label style={{display:'block',color:C.txs,fontSize:11,fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:5}}>Office Start Time</label>
+    <div style={{display:'flex',gap:8,alignItems:'center'}}>
+      <select value={company.officeStartHour%12||12} onChange={e=>{const h=parseInt(e.target.value);const isPM=company.officeStartHour>=12;setCompany(p=>({...p,officeStartHour:isPM?h===12?12:h+12:h===12?0:h}));}} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:13,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
+        {[12,1,2,3,4,5,6,7,8,9,10,11].map(h=><option key={h} value={h} style={{background:C.surf}}>{h}</option>)}
+      </select>
+      <select value={company.officeStartMinute} onChange={e=>setCompany(p=>({...p,officeStartMinute:parseInt(e.target.value)}))} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:13,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
+        {[0,15,30,45].map(m=><option key={m} value={m} style={{background:C.surf}}>{String(m).padStart(2,'0')}</option>)}
+      </select>
+      <select value={company.officeStartHour>=12?'PM':'AM'} onChange={e=>{const isPM=e.target.value==='PM';setCompany(p=>({...p,officeStartHour:isPM?p.officeStartHour===0?12:p.officeStartHour<=12?p.officeStartHour+12:p.officeStartHour:p.officeStartHour===12?0:p.officeStartHour>12?p.officeStartHour-12:p.officeStartHour}));}} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:13,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
+  </div>
+  <Input label="Grace Period (minutes)" value={company.gracePeriodMinutes} onChange={v=>setCompany(p=>({...p,gracePeriodMinutes:parseInt(v)}))} type="number" placeholder="15" />
+  <div style={{background:C.accS,borderRadius:8,padding:'10px 13px',fontSize:12,color:C.acc,marginBottom:14,lineHeight:1.8}}>
+    {(()=>{const h=company.officeStartHour;const m=company.officeStartMinute;const grace=company.gracePeriodMinutes||15;const displayH=h%12||12;const ampm=h>=12?'PM':'AM';const lateMin=m+grace;const lateH=h+Math.floor(lateMin/60);const lateMDisplay=lateMin%60;const lateAmpm=lateH>=12?'PM':'AM';const lateDisplayH=lateH%12||12;return<>✅ Before <strong>{displayH}:{String(m).padStart(2,'0')} {ampm}</strong> = Present<br/>⏰ Before <strong>{lateDisplayH}:{String(lateMDisplay).padStart(2,'0')} {lateAmpm}</strong> = Late<br/>❌ After = Absent</>;})()}
+  </div>
+  <Input label="Auto Logout Hours" value={company.autoLogoutHours||10} onChange={v=>setCompany(p=>({...p,autoLogoutHours:parseInt(v)}))} type="number" placeholder="10" />
+  </Card>
       </div>
       <div style={{marginTop:18,display:'flex',justifyContent:'flex-end'}}>
         <Btn onClick={handleSave} disabled={saving} size="lg">{saving?'Saving...':'Save All Settings'}</Btn>
