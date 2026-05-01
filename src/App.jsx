@@ -1,1644 +1,1788 @@
-// src/App.jsx — Full EMS Frontend
-// MongoDB backend · No Prisma · Railway-ready
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { io } from 'socket.io-client';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import ChatPage from './ChatPage.jsx';
-import ToolsPage from './ToolsPage.jsx';
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  LayoutDashboard, Users, CalendarCheck, FileText, Wallet,
+  ShoppingBag, Package, BarChart3, Settings, Shield, UserCircle,
+  MessageSquare, Wrench, ChevronRight, Bell, Search, LogOut,
+  TrendingUp, TrendingDown, Clock, Menu, X, Sun, Moon,
+  Circle, Dot, ChevronDown, AlertCircle, CheckCircle2,
+  ArrowUpRight, ArrowDownRight, Zap, Activity, Building2,
+  Hash, MoreHorizontal, RefreshCw, Filter, Plus, Eye
+} from "lucide-react";
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const T = {
+  bg:        "#070b12",
+  surface:   "#0d1117",
+  surfaceAlt:"#111820",
+  border:    "#1a2233",
+  borderFoc: "#2563eb",
+  accent:    "#2563eb",
+  accentSoft:"#1d4ed8",
+  accentGlow:"rgba(37,99,235,0.18)",
+  textPrimary:"#f0f4ff",
+  textSecondary:"#6b7a99",
+  textMuted: "#3d4d6a",
+  success:   "#10b981",
+  successBg: "rgba(16,185,129,0.08)",
+  warning:   "#f59e0b",
+  warningBg: "rgba(245,158,11,0.08)",
+  danger:    "#ef4444",
+  dangerBg:  "rgba(239,68,68,0.08)",
+  purple:    "#8b5cf6",
+  purpleBg:  "rgba(139,92,246,0.08)",
+  cyan:      "#06b6d4",
+  cyanBg:    "rgba(6,182,212,0.08)",
+};
 
-// ── API helper ────────────────────────────────────────────────
-const api = {
-  token:   ()    => localStorage.getItem('ems_token'),
-  headers: ()    => ({ 'Content-Type':'application/json', ...(api.token()?{Authorization:`Bearer ${api.token()}`}:{}) }),
-  async req(method, path, body) {
-    const r = await fetch(`${API}/api${path}`, { method, headers: api.headers(), ...(body!==undefined?{body:JSON.stringify(body)}:{}) });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.message || `Error ${r.status}`);
-    return d;
+// ─── Global styles injected once ──────────────────────────────────────────────
+const GLOBAL_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root { color-scheme: dark; }
+
+  html, body, #root {
+    height: 100%;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: ${T.bg};
+    color: ${T.textPrimary};
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: ${T.textMuted}; }
+
+  * { scrollbar-width: thin; scrollbar-color: ${T.border} transparent; }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulseRing {
+    0%   { box-shadow: 0 0 0 0 ${T.accentGlow}; }
+    70%  { box-shadow: 0 0 0 8px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
+  .animate-in { animation: fadeSlideIn 0.28s ease both; }
+
+  .skeleton {
+    background: linear-gradient(90deg, ${T.surface} 25%, ${T.surfaceAlt} 50%, ${T.surface} 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    border-radius: 6px;
+  }
+
+  input, select, textarea, button { font-family: inherit; }
+
+  button { cursor: pointer; border: none; background: none; }
+  a { color: inherit; text-decoration: none; }
+
+  .page-scroll { overflow-y: auto; height: 100%; }
+`;
+
+function injectGlobalStyles() {
+  if (document.getElementById("ems-global")) return;
+  const s = document.createElement("style");
+  s.id = "ems-global";
+  s.textContent = GLOBAL_CSS;
+  document.head.appendChild(s);
+}
+
+// ─── Nav items ────────────────────────────────────────────────────────────────
+const NAV_SECTIONS = [
+  {
+    label: "Workspace",
+    items: [
+      { id: "dashboard",    label: "Dashboard",      icon: LayoutDashboard },
+      { id: "analytics",    label: "Analytics",      icon: BarChart3 },
+      { id: "chat",         label: "Messages",       icon: MessageSquare, badge: 3 },
+    ],
   },
-  get:  p     => api.req('GET', p),
-  post: (p,b) => api.req('POST', p, b),
-  put:  (p,b) => api.req('PUT', p, b),
-  del:  p     => api.req('DELETE', p),
-};
+  {
+    label: "People",
+    items: [
+      { id: "employees",   label: "Employees",      icon: Users },
+      { id: "attendance",  label: "Attendance",     icon: CalendarCheck },
+      { id: "worklogs",    label: "Work Logs",      icon: FileText },
+      { id: "salary",      label: "Payroll",        icon: Wallet },
+    ],
+  },
+  {
+    label: "Commerce",
+    items: [
+      { id: "buyers",  label: "Buyers",   icon: ShoppingBag },
+      { id: "orders",  label: "Orders",   icon: Package },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { id: "company",  label: "Company",  icon: Building2 },
+      { id: "audit",    label: "Audit Log",icon: Shield },
+      { id: "profile",  label: "Profile",  icon: UserCircle },
+      { id: "tools",    label: "Tools",    icon: Wrench },
+    ],
+  },
+];
 
-// ── Colours ───────────────────────────────────────────────────
-const C = {
-  bg:'#0f172a', surf:'#1e293b', alt:'#334155', bdr:'#334155',
-  acc:'#6366f1', accH:'#4f46e5', accS:'rgba(99,102,241,.12)',
-  ok:'#10b981', okS:'rgba(16,185,129,.12)',
-  warn:'#f59e0b', warnS:'rgba(245,158,11,.12)',
-  err:'#ef4444', errS:'rgba(239,68,68,.12)',
-  tx:'#f1f5f9', txm:'#64748b', txs:'#94a3b8',
-  purple:'#8b5cf6', teal:'#14b8a6',
-};
+// ─── Stat card ────────────────────────────────────────────────────────────────
+function StatCard({ label, value, sub, delta, deltaDir, color = T.accent, icon: Icon, loading }) {
+  const isUp = deltaDir === "up";
+  return (
+    <div style={{
+      background: T.surface,
+      border: `1px solid ${T.border}`,
+      borderRadius: 12,
+      padding: "20px 22px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 14,
+      transition: "border-color .2s, box-shadow .2s",
+      animation: "fadeSlideIn .3s ease both",
+    }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = color + "55";
+        e.currentTarget.style.boxShadow = `0 0 0 1px ${color}22, 0 8px 24px rgba(0,0,0,.35)`;
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = T.border;
+        e.currentTarget.style.boxShadow = "none";
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: T.textSecondary, letterSpacing: ".04em", textTransform: "uppercase" }}>{label}</span>
+        <div style={{
+          width: 34, height: 34, borderRadius: 9,
+          background: color + "18",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {Icon && <Icon size={15} color={color} />}
+        </div>
+      </div>
+      {loading
+        ? <div className="skeleton" style={{ height: 32, width: "60%" }} />
+        : <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-.02em", color: T.textPrimary }}>{value}</span>
+      }
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: -4 }}>
+        {delta && (
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 3,
+            fontSize: 11, fontWeight: 600,
+            color: isUp ? T.success : T.danger,
+            background: isUp ? T.successBg : T.dangerBg,
+            borderRadius: 20, padding: "2px 7px",
+          }}>
+            {isUp ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+            {delta}
+          </span>
+        )}
+        {sub && <span style={{ fontSize: 12, color: T.textSecondary }}>{sub}</span>}
+      </div>
+    </div>
+  );
+}
 
-// ── Primitives ────────────────────────────────────────────────
-const Card = ({children, style={}}) => <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:14,padding:20,...style}}>{children}</div>;
+// ─── Section heading ──────────────────────────────────────────────────────────
+function SectionHeading({ title, sub, action }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+      <div>
+        <h2 style={{ fontSize: 16, fontWeight: 650, color: T.textPrimary, letterSpacing: "-.01em" }}>{title}</h2>
+        {sub && <p style={{ fontSize: 12, color: T.textSecondary, marginTop: 2 }}>{sub}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
 
-const Btn = ({children,onClick,variant='primary',size='md',disabled=false,style={},type='button'}) => {
-  const [hov,setHov]=useState(false);
-  const vs={primary:{bg:hov?C.accH:C.acc,color:'#fff',border:'none'},ghost:{bg:hov?C.accS:'transparent',color:C.acc,border:`1px solid ${C.bdr}`},danger:{bg:hov?'#dc2626':C.err,color:'#fff',border:'none'},success:{bg:hov?'#059669':C.ok,color:'#fff',border:'none'},outline:{bg:hov?C.alt:'transparent',color:C.tx,border:`1px solid ${C.bdr}`}};
-  const ss={sm:{padding:'5px 12px',fontSize:11},md:{padding:'8px 18px',fontSize:13},lg:{padding:'12px 26px',fontSize:15}};
-  const v=vs[variant]||vs.primary; const s=ss[size]||ss.md;
-  return <button type={type} onClick={onClick} disabled={disabled} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{background:disabled?C.bdr:v.bg,color:disabled?C.txm:v.color,border:v.border,...s,borderRadius:8,fontWeight:600,cursor:disabled?'not-allowed':'pointer',transition:'all .15s',display:'inline-flex',alignItems:'center',gap:6,...style}}>{children}</button>;
-};
+// ─── Table wrapper ────────────────────────────────────────────────────────────
+function Table({ columns, rows, loading, emptyText = "No data" }) {
+  return (
+    <div style={{
+      background: T.surface,
+      border: `1px solid ${T.border}`,
+      borderRadius: 12,
+      overflow: "hidden",
+    }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+              {columns.map(c => (
+                <th key={c.key} style={{
+                  padding: "11px 16px",
+                  textAlign: "left",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: T.textMuted,
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
+                  whiteSpace: "nowrap",
+                }}>{c.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
+                  {columns.map(c => (
+                    <td key={c.key} style={{ padding: "13px 16px" }}>
+                      <div className="skeleton" style={{ height: 14, width: c.width || "80%" }} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} style={{ padding: "40px 16px", textAlign: "center", color: T.textSecondary, fontSize: 13 }}>
+                  {emptyText}
+                </td>
+              </tr>
+            ) : rows.map((row, i) => (
+              <tr key={row.id || i} style={{
+                borderBottom: i < rows.length - 1 ? `1px solid ${T.border}` : "none",
+                transition: "background .15s",
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = T.surfaceAlt}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                {columns.map(c => (
+                  <td key={c.key} style={{ padding: "13px 16px", fontSize: 13, color: T.textPrimary }}>
+                    {c.render ? c.render(row[c.key], row) : row[c.key] ?? "—"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
-const Input = ({label,value,onChange,type='text',placeholder,error,required,autoFocus}) => (
-  <div style={{marginBottom:14}}>
-    {label&&<label style={{display:'block',color:C.txs,fontSize:11,fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:5}}>{label}{required&&' *'}</label>}
-    <input autoFocus={autoFocus} type={type} value={value||''} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-      style={{width:'100%',background:C.alt,border:`1px solid ${error?C.err:C.bdr}`,borderRadius:8,padding:'10px 13px',color:C.tx,fontSize:13,outline:'none',boxSizing:'border-box',fontFamily:'inherit'}} />
-    {error&&<div style={{color:C.err,fontSize:11,marginTop:3}}>{error}</div>}
-  </div>
-);
+// ─── Badge ────────────────────────────────────────────────────────────────────
+function Badge({ label, color = T.accent, bg }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center",
+      padding: "2px 9px",
+      borderRadius: 20,
+      fontSize: 11, fontWeight: 600,
+      color, background: bg || (color + "18"),
+      letterSpacing: ".02em",
+    }}>{label}</span>
+  );
+}
 
-const Select = ({label,value,onChange,options,required}) => (
-  <div style={{marginBottom:14}}>
-    {label&&<label style={{display:'block',color:C.txs,fontSize:11,fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:5}}>{label}{required&&' *'}</label>}
-    <select value={value||''} onChange={e=>onChange(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'10px 13px',color:C.tx,fontSize:13,outline:'none',boxSizing:'border-box',cursor:'pointer',fontFamily:'inherit'}}>
-      {options.map(o=><option key={o.value} value={o.value} style={{background:C.surf}}>{o.label}</option>)}
-    </select>
-  </div>
-);
+// ─── Button ───────────────────────────────────────────────────────────────────
+function Btn({ children, onClick, variant = "primary", size = "md", icon: Icon, style: extStyle, disabled }) {
+  const base = {
+    display: "inline-flex", alignItems: "center", gap: 6,
+    fontWeight: 600, borderRadius: 8, cursor: disabled ? "not-allowed" : "pointer",
+    transition: "all .18s", border: "1px solid transparent",
+    opacity: disabled ? .5 : 1,
+    fontSize: size === "sm" ? 12 : 13,
+    padding: size === "sm" ? "5px 12px" : "8px 16px",
+    ...extStyle,
+  };
+  const variants = {
+    primary: { background: T.accent, color: "#fff", borderColor: T.accent },
+    ghost:   { background: "transparent", color: T.textSecondary, borderColor: T.border },
+    danger:  { background: T.dangerBg, color: T.danger, borderColor: T.danger + "44" },
+  };
+  return (
+    <button disabled={disabled} onClick={onClick} style={{ ...base, ...variants[variant] }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.filter = "brightness(1.12)"; }}
+      onMouseLeave={e => { e.currentTarget.style.filter = ""; }}
+    >
+      {Icon && <Icon size={14} />}
+      {children}
+    </button>
+  );
+}
 
-const Modal = ({open,onClose,title,children,width=480}) => {
+// ─── Input ────────────────────────────────────────────────────────────────────
+function Input({ value, onChange, placeholder, type = "text", icon: Icon, style: extStyle }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ position: "relative", ...extStyle }}>
+      {Icon && (
+        <Icon size={14} color={focused ? T.accent : T.textMuted}
+          style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", transition: "color .2s" }}
+        />
+      )}
+      <input
+        type={type} value={value} onChange={onChange} placeholder={placeholder}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={{
+          width: "100%",
+          background: T.bg,
+          border: `1px solid ${focused ? T.borderFoc : T.border}`,
+          borderRadius: 8,
+          color: T.textPrimary,
+          fontSize: 13,
+          padding: Icon ? "8px 12px 8px 32px" : "8px 12px",
+          outline: "none",
+          transition: "border-color .18s, box-shadow .18s",
+          boxShadow: focused ? `0 0 0 3px ${T.accentGlow}` : "none",
+        }}
+      />
+    </div>
+  );
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+function Modal({ open, onClose, title, children, width = 480 }) {
+  useEffect(() => {
+    const handler = e => { if (e.key === "Escape") onClose(); };
+    if (open) document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, onClose]);
   if (!open) return null;
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:20}} onClick={onClose}>
-      <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:16,width:'100%',maxWidth:width,maxHeight:'90vh',overflow:'auto',padding:26}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-          <h2 style={{color:C.tx,fontSize:17,fontWeight:700,margin:0}}>{title}</h2>
-          <button onClick={onClose} style={{background:'none',border:'none',color:C.txm,cursor:'pointer',fontSize:22}}>×</button>
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(7,11,18,.75)",
+      backdropFilter: "blur(4px)", display: "flex", alignItems: "center",
+      justifyContent: "center", zIndex: 1000, padding: 20,
+    }}>
+      <div onClick={e => e.stopPropagation()} className="animate-in" style={{
+        background: T.surface, border: `1px solid ${T.border}`,
+        borderRadius: 14, width: "100%", maxWidth: width,
+        boxShadow: "0 24px 64px rgba(0,0,0,.6)",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "18px 22px", borderBottom: `1px solid ${T.border}`,
+        }}>
+          <h3 style={{ fontSize: 15, fontWeight: 650, color: T.textPrimary }}>{title}</h3>
+          <button onClick={onClose} style={{
+            width: 28, height: 28, borderRadius: 7,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: T.textSecondary, transition: "background .15s, color .15s",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = T.border; e.currentTarget.style.color = T.textPrimary; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSecondary; }}
+          >
+            <X size={15} />
+          </button>
         </div>
-        {children}
+        <div style={{ padding: "22px" }}>{children}</div>
       </div>
     </div>
   );
-};
+}
 
-const Toast = ({message,type,onClose}) => {
-  const cols={success:C.ok,error:C.err,info:C.acc,warning:C.warn};
-  useEffect(()=>{const t=setTimeout(onClose,4000);return()=>clearTimeout(t);},[onClose]);
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function Toast({ toasts }) {
   return (
-    <div style={{position:'fixed',bottom:22,right:22,zIndex:2000,background:C.surf,border:`1px solid ${cols[type]||cols.info}`,borderRadius:10,padding:'11px 18px',color:C.tx,fontSize:13,boxShadow:'0 8px 32px rgba(0,0,0,.4)',display:'flex',alignItems:'center',gap:10,minWidth:220,maxWidth:320}}>
-      <div style={{width:8,height:8,borderRadius:'50%',background:cols[type]||cols.info,flexShrink:0}} />
-      {message}
+    <div style={{
+      position: "fixed", bottom: 24, right: 24,
+      display: "flex", flexDirection: "column", gap: 10, zIndex: 2000,
+    }}>
+      {toasts.map(t => (
+        <div key={t.id} className="animate-in" style={{
+          display: "flex", alignItems: "center", gap: 10,
+          background: T.surface, border: `1px solid ${t.type === "success" ? T.success + "44" : t.type === "error" ? T.danger + "44" : T.border}`,
+          borderRadius: 10, padding: "11px 16px",
+          boxShadow: "0 8px 24px rgba(0,0,0,.4)",
+          fontSize: 13, fontWeight: 500, color: T.textPrimary,
+          maxWidth: 340,
+        }}>
+          {t.type === "success" && <CheckCircle2 size={15} color={T.success} />}
+          {t.type === "error" && <AlertCircle size={15} color={T.danger} />}
+          {t.type === "info" && <Zap size={15} color={T.accent} />}
+          {t.message}
+        </div>
+      ))}
     </div>
   );
-};
+}
 
-const Badge = ({label,color='blue'}) => {
-  const m={blue:{bg:C.accS,tx:C.acc},green:{bg:C.okS,tx:C.ok},yellow:{bg:C.warnS,tx:C.warn},red:{bg:C.errS,tx:C.err},gray:{bg:'rgba(100,116,139,.15)',tx:C.txs},purple:{bg:'rgba(139,92,246,.12)',tx:C.purple}};
-  const cl=m[color]||m.blue;
-  return <span style={{background:cl.bg,color:cl.tx,padding:'2px 9px',borderRadius:20,fontSize:10,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',whiteSpace:'nowrap'}}>{label}</span>;
-};
+// ─── Loading spinner ──────────────────────────────────────────────────────────
+function Spinner({ size = 18, color = T.accent }) {
+  return (
+    <div style={{
+      width: size, height: size,
+      border: `2px solid ${color}33`,
+      borderTop: `2px solid ${color}`,
+      borderRadius: "50%",
+      animation: "spin .7s linear infinite",
+      flexShrink: 0,
+    }} />
+  );
+}
 
-const Spinner = ({size=36}) => (
-  <div style={{display:'flex',justifyContent:'center',padding:48}}>
-    <div style={{width:size,height:size,border:`3px solid ${C.bdr}`,borderTop:`3px solid ${C.acc}`,borderRadius:'50%',animation:'spin .8s linear infinite'}} />
-  </div>
-);
-
-const Avatar = ({name,size=34,color=C.acc}) => {
-  const init=(name||'?').split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
-  return <div style={{width:size,height:size,borderRadius:'50%',background:color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:size*.36,fontWeight:700,color:'#fff',flexShrink:0}}>{init}</div>;
-};
-
-const StatCard = ({icon,label,value,sub,color=C.acc}) => (
-  <Card style={{position:'relative',overflow:'hidden'}}>
-    <div style={{position:'absolute',top:0,right:0,width:56,height:56,borderRadius:'0 14px 0 56px',background:`${color}15`}} />
-    <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
-      <div style={{width:42,height:42,borderRadius:10,background:`${color}20`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{icon}</div>
-      <div>
-        <div style={{color:C.txm,fontSize:10,fontWeight:600,letterSpacing:'.07em',textTransform:'uppercase',marginBottom:3}}>{label}</div>
-        <div style={{color:C.tx,fontSize:26,fontWeight:800,lineHeight:1}}>{value??'—'}</div>
-        {sub&&<div style={{color:C.txs,fontSize:11,marginTop:3}}>{sub}</div>}
+// ─── Page shell ───────────────────────────────────────────────────────────────
+function PageShell({ title, sub, actions, children }) {
+  return (
+    <div className="page-scroll" style={{ padding: "28px 32px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: T.textPrimary, letterSpacing: "-.02em" }}>{title}</h1>
+          {sub && <p style={{ fontSize: 13, color: T.textSecondary, marginTop: 4 }}>{sub}</p>}
+        </div>
+        {actions && <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>{actions}</div>}
       </div>
+      <div className="animate-in">{children}</div>
     </div>
-  </Card>
-);
+  );
+}
 
-const ProgressBar = ({value,color=C.acc}) => (
-  <div style={{background:C.bdr,borderRadius:5,height:5,overflow:'hidden'}}>
-    <div style={{width:`${Math.min(100,Math.max(0,value))}%`,height:'100%',background:color,borderRadius:5,transition:'width .5s'}} />
-  </div>
-);
+// ─── Dashboard Page ───────────────────────────────────────────────────────────
+function DashboardPage({ addToast }) {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({});
+  const [recentActivity, setRecentActivity] = useState([]);
+  const API = "https://nexus-backend-production-771f.up.railway.app";
 
-// ── Live Clock ────────────────────────────────────────────────
-const LiveClock = () => {
-  const [time,setTime]=useState(new Date());
-  useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t);},[]);
-  return <span style={{color:C.txs,fontSize:12,fontFamily:'monospace'}}>{time.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>;
-};
-
-// ── Auth Page ─────────────────────────────────────────────────
-const AuthPage = ({onLogin}) => {
-  const [mode,setMode]=useState('login');
-  const [form,setForm]=useState({name:'',email:'',password:'',role:'employee',jobTitle:'',department:''});
-  const [loading,setLoading]=useState(false);
-  const [error,setError]=useState('');
-  const [showPass,setShowPass]=useState(false);
-  const [company,setCompany]=useState({name:'EMS',logoUrl:''});
-
-  useEffect(()=>{
-    api.get('/company').then(d=>setCompany(d.data)).catch(()=>{});
-  },[]);
-
-  const handleSubmit = async () => {
-    setError('');
-    if (!form.email||!form.password){setError('Email and password required');return;}
-    if (mode==='signup'&&!form.name){setError('Name required');return;}
-    if (mode==='signup'&&form.password.length<8){setError('Password min 8 chars');return;}
-    try {
+  useEffect(() => {
+    const load = async () => {
       setLoading(true);
-      const endpoint = mode==='login'?'/auth/login':'/auth/register';
-      const d = await api.post(endpoint, form);
-      localStorage.setItem('ems_token', d.token);
-      onLogin(d.user, d.token);
-    } catch(err){ setError(err.message); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <div style={{minHeight:'100vh',background:C.bg,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Segoe UI',sans-serif",padding:20}}>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}body{background:${C.bg};color:${C.tx}}@keyframes spin{to{transform:rotate(360deg)}}input,select{font-family:inherit}`}</style>
-      <div style={{position:'absolute',inset:0,backgroundImage:`radial-gradient(circle at 20% 50%,rgba(99,102,241,.08) 0%,transparent 50%),radial-gradient(circle at 80% 20%,rgba(139,92,246,.06) 0%,transparent 50%)`,pointerEvents:'none'}} />
-      <div style={{width:'100%',maxWidth:420,position:'relative'}}>
-        <div style={{textAlign:'center',marginBottom:28}}>
-          {company.logoUrl ? <img src={company.logoUrl} alt="logo" style={{height:52,marginBottom:12,objectFit:'contain'}} /> :
-            <div style={{display:'inline-flex',width:52,height:52,borderRadius:15,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',alignItems:'center',justifyContent:'center',fontSize:22,fontWeight:900,color:'#fff',marginBottom:12,boxShadow:'0 0 32px rgba(99,102,241,.3)'}}>E</div>}
-          <h1 style={{color:C.tx,fontSize:22,fontWeight:800,margin:'0 0 4px'}}>{company.name || 'EMS'}</h1>
-          <p style={{color:C.txm,fontSize:13}}>Employee Management System</p>
-        </div>
-
-        <div style={{display:'flex',background:C.alt,borderRadius:10,padding:4,marginBottom:20,border:`1px solid ${C.bdr}`}}>
-          {[['login','Sign In'],['signup','Register']].map(([m,l])=>(
-            <button key={m} onClick={()=>{setMode(m);setError('');}} style={{flex:1,padding:'8px 0',borderRadius:7,border:'none',cursor:'pointer',fontWeight:600,fontSize:12,transition:'all .15s',background:mode===m?C.acc:'transparent',color:mode===m?'#fff':C.txs}}>{l}</button>
-          ))}
-        </div>
-
-        <Card>
-          {error&&<div style={{background:C.errS,border:`1px solid ${C.err}30`,borderRadius:8,padding:'9px 13px',color:C.err,fontSize:12,marginBottom:14}}>{error}</div>}
-          {mode==='signup'&&<>
-            <Input label="Full Name" value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} placeholder="Your full name" required autoFocus />
-            <Input label="Job Title" value={form.jobTitle} onChange={v=>setForm(p=>({...p,jobTitle:v}))} placeholder="e.g. Sales Manager" />
-            <Input label="Department" value={form.department} onChange={v=>setForm(p=>({...p,department:v}))} placeholder="e.g. Exports" />
-          </>}
-          <Input label="Email" value={form.email} onChange={v=>setForm(p=>({...p,email:v}))} type="email" placeholder="you@company.com" required />
-          <div style={{position:'relative'}}>
-            <Input label="Password" value={form.password} onChange={v=>setForm(p=>({...p,password:v}))} type={showPass?'text':'password'} placeholder="Min 8 characters" required />
-            <button onClick={()=>setShowPass(!showPass)} style={{position:'absolute',right:12,top:32,background:'none',border:'none',color:C.txm,cursor:'pointer',fontSize:11}}>{showPass?'Hide':'Show'}</button>
-          </div>
-          <Btn onClick={handleSubmit} disabled={loading} style={{width:'100%',justifyContent:'center',padding:'12px 0',fontSize:14,marginTop:4}}>
-            {loading?'Please wait...':(mode==='login'?'Sign In →':'Create Account →')}
-          </Btn>
-          {mode==='login'&&<p style={{textAlign:'center',marginTop:12,fontSize:12,color:C.txm}}>First time? <span style={{color:C.acc,cursor:'pointer'}} onClick={()=>setMode('signup')}>Create account</span></p>}
-          <p style={{textAlign:'center',marginTop:8,fontSize:11,color:C.txm}}>
-            <span style={{color:C.acc,cursor:'pointer'}} onClick={()=>alert('Enter your email above, then use Forgot Password on next version')}>Forgot password?</span>
-          </p>
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-// ── Sidebar ───────────────────────────────────────────────────
-const Sidebar = ({tab,setTab,user,onLogout,company,collapsed,setCollapsed}) => {
-  const isAdmin=['admin','super_admin'].includes(user.role);
-  const adminNav=[
-    {id:'dashboard',icon:'⊞',label:'Dashboard'},
-    {id:'employees',icon:'👤',label:'Employees'},
-    {id:'attendance',icon:'📋',label:'Attendance'},
-    {id:'worklogs',icon:'📝',label:'Work Logs'},
-    {id:'salary',icon:'💵',label:'Salary'},
-    {id:'buyers',icon:'🤝',label:'Buyers'},
-    {id:'orders',icon:'📦',label:'Orders'},
-    {id:'analytics',icon:'📊',label:'Analytics'},
-    {id:'company',icon:'🏢',label:'Company Settings'},
-    {id:'audit',icon:'🔍',label:'Audit Logs'},
-    {id:'chat',icon:'💬',label:'Chat'},
-    {id:'tools',icon:'🧰',label:'Tools Hub'},
-    
-  ];
-  const empNav=[
-    {id:'my-dashboard',icon:'⊞',label:'My Dashboard'},
-    {id:'my-attendance',icon:'📋',label:'My Attendance'},
-    {id:'worklogs',icon:'📝',label:'Work Log'},
-    {id:'my-salary',icon:'💵',label:'My Salary'},
-    {id:'profile',icon:'👤',label:'Profile'},
-    {id:'chat',icon:'💬',label:'Chat'},
-    {id:'tools',icon:'🧰',label:'Tools Hub'},
-  ];
-  const items=isAdmin?adminNav:empNav;
-  const rC={super_admin:C.warn,admin:C.err,employee:C.ok};
-  const rB={super_admin:'yellow',admin:'red',employee:'green'};
-
-  return (
-    <div style={{width:collapsed?68:220,background:C.surf,borderRight:`1px solid ${C.bdr}`,height:'100vh',position:'fixed',left:0,top:0,display:'flex',flexDirection:'column',transition:'width .2s ease',overflow:'hidden',zIndex:100}}>
-      <div style={{padding:collapsed?'14px 10px':'14px 16px',borderBottom:`1px solid ${C.bdr}`,display:'flex',alignItems:'center',gap:9,minHeight:64}}>
-        {company?.logoUrl?<img src={company.logoUrl} alt="logo" style={{width:32,height:32,borderRadius:8,objectFit:'cover',flexShrink:0}} />:
-          <div style={{width:32,height:32,borderRadius:9,flexShrink:0,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:900,color:'#fff'}}>E</div>}
-        {!collapsed&&<div style={{overflow:'hidden'}}>
-          <div style={{color:C.tx,fontWeight:800,fontSize:12,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{company?.name||'EMS'}</div>
-          <div style={{color:C.txm,fontSize:9,textTransform:'uppercase',letterSpacing:'.07em'}}>Management System</div>
-        </div>}
-        <button onClick={()=>setCollapsed(!collapsed)} style={{marginLeft:'auto',background:'none',border:'none',color:C.txm,cursor:'pointer',fontSize:13,flexShrink:0}}>{collapsed?'→':'←'}</button>
-      </div>
-      <nav style={{flex:1,padding:'8px 6px',overflowY:'auto'}}>
-        {items.map(item=>{
-          const active=tab===item.id;
-          return <div key={item.id} onClick={()=>setTab(item.id)} style={{display:'flex',alignItems:'center',gap:9,padding:'8px 10px',borderRadius:8,marginBottom:2,cursor:'pointer',background:active?C.accS:'transparent',color:active?C.acc:C.txs,fontWeight:active?700:400,fontSize:12,transition:'all .12s',position:'relative'}}
-            onMouseEnter={e=>{if(!active)e.currentTarget.style.background=C.bdr;}}
-            onMouseLeave={e=>{if(!active)e.currentTarget.style.background='transparent';}}>
-            <span style={{fontSize:14,flexShrink:0}}>{item.icon}</span>
-            {!collapsed&&<span style={{whiteSpace:'nowrap'}}>{item.label}</span>}
-            {active&&<div style={{position:'absolute',right:0,top:'20%',height:'60%',width:3,background:C.acc,borderRadius:'3px 0 0 3px'}} />}
-          </div>;
-        })}
-      </nav>
-      <div style={{padding:'8px 6px',borderTop:`1px solid ${C.bdr}`}}>
-        <div style={{display:'flex',alignItems:'center',gap:8,padding:'7px 9px',borderRadius:8}}>
-          <Avatar name={user.name} size={28} color={rC[user.role]||C.acc} />
-          {!collapsed&&<div style={{overflow:'hidden',flex:1}}>
-            <div style={{color:C.tx,fontWeight:700,fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.name}</div>
-            <Badge label={user.role.replace('_',' ')} color={rB[user.role]||'blue'} />
-          </div>}
-        </div>
-        <div onClick={onLogout} style={{display:'flex',alignItems:'center',gap:9,padding:'7px 10px',borderRadius:8,cursor:'pointer',color:C.err,fontSize:12,fontWeight:600}}
-          onMouseEnter={e=>e.currentTarget.style.background=C.errS} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-          <span style={{fontSize:13,flexShrink:0}}>⎋</span>{!collapsed&&'Sign Out'}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ── Dashboard (Admin) ─────────────────────────────────────────
-const Dashboard = ({user,setTab}) => {
-  const [data,setData]=useState(null);
-  const [loading,setLoading]=useState(true);
-  useEffect(()=>{
-    api.get('/dashboard').then(d=>setData(d.data)).catch(()=>{}).finally(()=>setLoading(false));
-  },[]);
-  if (loading) return <Spinner />;
-  if (!data)   return <div style={{padding:28,color:C.txm}}>Could not load dashboard.</div>;
-  return (
-    <div style={{padding:28}}>
-      <div style={{marginBottom:22}}>
-        <h2 style={{color:C.tx,fontSize:20,fontWeight:800,margin:'0 0 4px'}}>Good {new Date().getHours()<12?'morning':'afternoon'}, {user.name.split(' ')[0]} 👋</h2>
-        <p style={{color:C.txm,fontSize:13,margin:0,display:'flex',alignItems:'center',gap:8}}>Today is {new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})} · <LiveClock /></p>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:14,marginBottom:22}}>
-        <StatCard icon="👥" label="Total Employees" value={data.users} color={C.acc} />
-        <StatCard icon="✅" label="Present Today" value={data.presentToday} color={C.ok} />
-        <StatCard icon="💵" label="Pending Salaries" value={data.pendingSalaries} color={C.warn} />
-        <StatCard icon="📦" label="Total Orders" value={data.totalOrders} color={C.purple} />
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>Recent Work Logs</h3>
-          {data.recentLogs?.length===0?<p style={{color:C.txm,fontSize:12}}>No work logs yet.</p>:
-            data.recentLogs?.map(l=>(
-              <div key={l._id} style={{display:'flex',gap:9,marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${C.bdr}`}}>
-                <Avatar name={l.user?.name||'?'} size={28} />
-                <div style={{flex:1}}>
-                  <div style={{color:C.tx,fontSize:12,fontWeight:600}}>{l.user?.name}</div>
-                  <div style={{color:C.txs,fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.description}</div>
-                  <div style={{color:C.txm,fontSize:10}}>{l.date}</div>
-                </div>
-              </div>
-            ))
-          }
-        </Card>
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>Quick Actions</h3>
-          <div style={{display:'flex',flexDirection:'column',gap:9}}>
-            <Btn onClick={()=>setTab('employees')} variant="ghost" style={{justifyContent:'flex-start'}}>👤 Manage Employees</Btn>
-            <Btn onClick={()=>setTab('attendance')} variant="ghost" style={{justifyContent:'flex-start'}}>📋 View Attendance</Btn>
-            <Btn onClick={()=>setTab('salary')} variant="ghost" style={{justifyContent:'flex-start'}}>💵 Manage Salaries</Btn>
-            <Btn onClick={()=>setTab('orders')} variant="ghost" style={{justifyContent:'flex-start'}}>📦 View Orders</Btn>
-            <Btn onClick={()=>setTab('analytics')} variant="ghost" style={{justifyContent:'flex-start'}}>📊 Analytics</Btn>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-// ── Employee Dashboard ────────────────────────────────────────
-const EmployeeDashboard = ({user}) => {
-  const [att,setAtt]=useState(null);
-  const [salary,setSalary]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [toast,setToast]=useState(null);
-  const today=new Date().toISOString().split('T')[0];
-
-  const load = useCallback(async()=>{
-    try {
-      const [ar,sr]=await Promise.all([api.get(`/attendance?date=${today}`),api.get('/salaries')]);
-      const myAtt=ar.data.find(a=>a.user?._id===user.id||a.user===user.id);
-      setAtt(myAtt||null); setSalary(sr.data||[]);
-    } catch{}
-    setLoading(false);
-  },[user.id,today]);
-
-  useEffect(()=>{load();},[load]);
-
-  const handleCheckout=async()=>{
-    try { await api.post('/attendance/checkout'); setToast({message:'Checked out successfully',type:'success'}); load(); }
-    catch(err){ setToast({message:err.message,type:'error'}); }
-  };
-
-  if (loading) return <Spinner />;
-  const latestSal=salary[0];
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <div style={{marginBottom:22}}>
-        <h2 style={{color:C.tx,fontSize:20,fontWeight:800,margin:'0 0 4px'}}>Hello, {user.name.split(' ')[0]} 👋</h2>
-        <p style={{color:C.txm,fontSize:13,margin:0,display:'flex',alignItems:'center',gap:8}}>{new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})} · <LiveClock /></p>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:14,marginBottom:22}}>
-        <StatCard icon="📋" label="Today's Status" value={att?att.status.charAt(0).toUpperCase()+att.status.slice(1):'Not Checked In'} color={att?.status==='present'?C.ok:att?.status==='late'?C.warn:C.err} />
-        <StatCard icon="⏰" label="Check In" value={att?.checkIn?new Date(att.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'—'} color={C.acc} />
-        <StatCard icon="⏱" label="Check Out" value={att?.checkOut?new Date(att.checkOut).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):att?'Active':'—'} color={C.teal} />
-        <StatCard icon="💵" label="Salary Status" value={latestSal?.status||'—'} color={latestSal?.status==='paid'?C.ok:C.warn} />
-      </div>
-      {att&&!att.checkOut&&(
-        <Card style={{marginBottom:18,background:`linear-gradient(135deg,${C.accS},${C.okS})`}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-            <div>
-              <div style={{color:C.tx,fontWeight:700,fontSize:14}}>You are currently checked in</div>
-              <div style={{color:C.txm,fontSize:12,marginTop:3}}>Since {new Date(att.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
-            </div>
-            <Btn onClick={handleCheckout} variant="danger">Check Out</Btn>
-          </div>
-        </Card>
-      )}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}}>
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>Recent Salary History</h3>
-          {salary.length===0?<p style={{color:C.txm,fontSize:12}}>No salary records yet.</p>:
-            salary.slice(0,5).map(s=>(
-              <div key={s._id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:9,paddingBottom:9,borderBottom:`1px solid ${C.bdr}`}}>
-                <div>
-                  <div style={{color:C.tx,fontSize:12,fontWeight:600}}>{s.month}</div>
-                  <div style={{color:C.txm,fontSize:11}}>₹{s.amount?.toLocaleString()}</div>
-                </div>
-                <Badge label={s.status} color={s.status==='paid'?'green':s.status==='pending'?'yellow':'red'} />
-              </div>
-            ))
-          }
-        </Card>
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>Profile</h3>
-          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
-            <Avatar name={user.name} size={48} />
-            <div>
-              <div style={{color:C.tx,fontWeight:700,fontSize:15}}>{user.name}</div>
-              <div style={{color:C.txs,fontSize:12}}>{user.email}</div>
-              {user.jobTitle&&<div style={{color:C.txm,fontSize:11}}>{user.jobTitle}</div>}
-            </div>
-          </div>
-          <Badge label={user.role} color="blue" />
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-// ── Employees ─────────────────────────────────────────────────
-const EmployeesPage = ({user}) => {
-  const [employees,setEmployees]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [search,setSearch]=useState('');
-  const [modal,setModal]=useState(false);
-  const [editUser,setEditUser]=useState(null);
-  const [saving,setSaving]=useState(false);
-  const [toast,setToast]=useState(null);
-  const [form,setForm]=useState({name:'',email:'',password:'',role:'employee',jobTitle:'',department:'',salary:''});
-
-  const load=useCallback(async()=>{
-    try{setLoading(true);const r=await api.get(`/users${search?`?search=${search}`:''}`);setEmployees(r.data||[]);}
-    catch{}finally{setLoading(false);}
-  },[search]);
-  useEffect(()=>{load();},[load]);
-
-  const handleSave=async()=>{
-    if (!form.name||!form.email){setToast({message:'Name and email required',type:'error'});return;}
-    try{
-      setSaving(true);
-      if(editUser){await api.put(`/users/${editUser._id}`,form);setToast({message:'Updated',type:'success'});}
-      else{
-        if(!form.password||form.password.length<8){setToast({message:'Password min 8 chars',type:'error'});return;}
-        await api.post('/auth/admin/create-employee',form);setToast({message:'Employee created',type:'success'});
-      }
-      setModal(false);setEditUser(null);setForm({name:'',email:'',password:'',role:'employee',jobTitle:'',department:'',salary:''});await load();
-    }catch(err){setToast({message:err.message,type:'error'});}finally{setSaving(false);}
-  };
-
-  const handleDelete=async id=>{
-    if(!window.confirm('Deactivate this employee?'))return;
-    try{await api.del(`/users/${id}`);setToast({message:'Deactivated',type:'info'});await load();}
-    catch(err){setToast({message:err.message,type:'error'});}
-  };
-
-  const rC={super_admin:'yellow',admin:'red',employee:'green'};
-
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-        <div><h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Employees</h2><p style={{color:C.txm,fontSize:12,margin:0}}>{employees.length} members</p></div>
-        <Btn onClick={()=>{setEditUser(null);setForm({name:'',email:'',password:'',role:'employee',jobTitle:'',department:'',salary:''});setModal(true);}}>+ Add Employee</Btn>
-      </div>
-      <Card style={{marginBottom:14}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search employees..."
-          style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'8px 13px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />
-      </Card>
-      {loading?<Spinner />:(
-        <Card style={{padding:0}}>
-          <table style={{width:'100%',borderCollapse:'collapse'}}>
-            <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
-              {['Employee','Job Title','Department','Salary','Role','Actions'].map(h=>(
-                <th key={h} style={{padding:'11px 16px',textAlign:'left',color:C.txm,fontSize:10,fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase'}}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {employees.length===0?<tr><td colSpan={6} style={{padding:32,textAlign:'center',color:C.txm}}>No employees found</td></tr>
-              :employees.map((emp,i)=>(
-                <tr key={emp._id} style={{borderBottom:i<employees.length-1?`1px solid ${C.bdr}`:'none'}}
-                  onMouseEnter={e=>e.currentTarget.style.background=C.alt} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                  <td style={{padding:'11px 16px'}}><div style={{display:'flex',alignItems:'center',gap:8}}><Avatar name={emp.name} size={28} /><div><div style={{color:C.tx,fontWeight:600,fontSize:12}}>{emp.name}</div><div style={{color:C.txs,fontSize:11}}>{emp.email}</div></div></div></td>
-                  <td style={{padding:'11px 16px',color:C.txs,fontSize:12}}>{emp.jobTitle||'—'}</td>
-                  <td style={{padding:'11px 16px',color:C.txs,fontSize:12}}>{emp.department||'—'}</td>
-                  <td style={{padding:'11px 16px',color:C.tx,fontSize:12,fontWeight:600}}>₹{emp.salary?.toLocaleString()||'0'}</td>
-                  <td style={{padding:'11px 16px'}}><Badge label={emp.role.replace('_',' ')} color={rC[emp.role]||'blue'} /></td>
-                  <td style={{padding:'11px 16px'}}>
-                    <div style={{display:'flex',gap:5}}>
-                      <Btn size="sm" variant="ghost" onClick={()=>{setEditUser(emp);setForm({name:emp.name,email:emp.email,role:emp.role,jobTitle:emp.jobTitle||'',department:emp.department||'',salary:emp.salary||'',password:''});setModal(true);}}>Edit</Btn>
-                      {user.role==='super_admin'&&<Btn size="sm" variant="danger" onClick={()=>handleDelete(emp._id)}>Remove</Btn>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
-      <Modal open={modal} onClose={()=>setModal(false)} title={editUser?'Edit Employee':'Add Employee'}>
-        <Input label="Full Name" value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} placeholder="Full name" required />
-        <Input label="Email" value={form.email} onChange={v=>setForm(p=>({...p,email:v}))} type="email" placeholder="employee@company.com" required />
-        {!editUser&&<Input label="Password" value={form.password} onChange={v=>setForm(p=>({...p,password:v}))} type="password" placeholder="Min 8 chars" required />}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-          <Input label="Job Title" value={form.jobTitle} onChange={v=>setForm(p=>({...p,jobTitle:v}))} placeholder="e.g. Sales Manager" />
-          <Input label="Department" value={form.department} onChange={v=>setForm(p=>({...p,department:v}))} placeholder="e.g. Exports" />
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-          <Select label="Role" value={form.role} onChange={v=>setForm(p=>({...p,role:v}))} options={[{value:'employee',label:'Employee'},{value:'admin',label:'Admin'}]} required />
-          <Input label="Salary (₹)" value={form.salary} onChange={v=>setForm(p=>({...p,salary:v}))} type="number" placeholder="0" />
-        </div>
-        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}>
-          <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
-          <Btn onClick={handleSave} disabled={saving}>{saving?'Saving...':editUser?'Save Changes':'Add Employee'}</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-};
-
-// ── Attendance ────────────────────────────────────────────────
-const AttendancePage = ({user}) => {
-  const isAdmin=['admin','super_admin'].includes(user.role);
-  const today=new Date().toISOString().split('T')[0];
-  const currentMonth=today.slice(0,7);
-  const [view,setView]=useState('monthly');
-  const [month,setMonth]=useState(currentMonth);
-  const [date,setDate]=useState(today);
-  const [monthlyData,setMonthlyData]=useState([]);
-  const [dailyAtt,setDailyAtt]=useState([]);
-  const [holidays,setHolidays]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [toast,setToast]=useState(null);
-  const [selectedUser,setSelectedUser]=useState('');
-  const [employees,setEmployees]=useState([]);
-  const [holidayModal,setHolidayModal]=useState(false);
-  const [holidayForm,setHolidayForm]=useState({date:today,name:'',type:'holiday'});
-
-  const load=useCallback(async()=>{
-    try{
-      setLoading(true);
-      if(view==='monthly'){
-        const q=isAdmin&&selectedUser?`?month=${month}&userId=${selectedUser}`:`?month=${month}`;
-        const [mr,hr]=await Promise.all([api.get(`/attendance/monthly${q}`),api.get(`/holidays?month=${month}`)]);
-        setMonthlyData(mr.data||[]);
-        setHolidays(hr.data||[]);
-      } else {
-        const r=await api.get(`/attendance?date=${date}`);
-        setDailyAtt(r.data||[]);
-      }
-    }catch{}finally{setLoading(false);}
-  },[view,month,date,selectedUser,isAdmin]);
-
-  useEffect(()=>{load();},[load]);
-  useEffect(()=>{if(isAdmin)api.get('/users').then(r=>setEmployees(r.data||[])).catch(()=>{});},[isAdmin]);
-
-  const handleCheckout=async()=>{
-    try{await api.post('/attendance/checkout');setToast({message:'Checked out successfully',type:'success'});load();}
-    catch(err){setToast({message:err.message,type:'error'});}
-  };
-
-  const handleAddHoliday=async()=>{
-    if(!holidayForm.name||!holidayForm.date){setToast({message:'Date and name required',type:'error'});return;}
-    try{
-      await api.post('/holidays',holidayForm);
-      setToast({message:'Holiday added',type:'success'});
-      setHolidayModal(false);
-      setHolidayForm({date:today,name:'',type:'holiday'});
-      load();
-    }catch(err){setToast({message:err.message,type:'error'});}
-  };
-
-  const handleDeleteHoliday=async(id)=>{
-    try{await api.del(`/holidays/${id}`);setToast({message:'Holiday removed',type:'info'});load();}
-    catch(err){setToast({message:err.message,type:'error'});}
-  };
-
-  const stC={present:'green',late:'yellow',absent:'red','half-day':'purple',holiday:'blue',weekend:'gray',future:'gray'};
-  const stBg={present:C.okS,late:C.warnS,absent:C.errS,'half-day':'rgba(139,92,246,.12)',holiday:C.accS,weekend:'rgba(100,116,139,.1)',future:'transparent'};
-
-  const fmt=d=>d?new Date(d).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}):'—';
-
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-
-      {/* Header */}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18,flexWrap:'wrap',gap:10}}>
-        <div>
-          <h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Attendance</h2>
-          <p style={{color:C.txm,fontSize:12,margin:0}}>Track and manage attendance</p>
-        </div>
-        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-          {/* View toggle */}
-          <div style={{display:'flex',background:C.alt,borderRadius:8,padding:3,border:`1px solid ${C.bdr}`}}>
-            {['monthly','daily'].map(v=>(
-              <button key={v} onClick={()=>setView(v)} style={{padding:'5px 14px',borderRadius:6,border:'none',cursor:'pointer',background:view===v?C.acc:'transparent',color:view===v?'#fff':C.txs,fontSize:11,fontWeight:600,transition:'all .15s'}}>
-                {v==='monthly'?'📅 Monthly':'📋 Daily'}
-              </button>
-            ))}
-          </div>
-          {view==='monthly'&&<input type="month" value={month} onChange={e=>setMonth(e.target.value)} style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 12px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />}
-          {view==='daily'&&<input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 12px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />}
-          {isAdmin&&<Btn onClick={()=>setHolidayModal(true)} variant="ghost" size="sm">🎉 Add Holiday</Btn>}
-          {!isAdmin&&<Btn variant="danger" onClick={handleCheckout} size="sm">Check Out</Btn>}
-        </div>
-      </div>
-
-      {/* Admin employee filter */}
-      {isAdmin&&view==='monthly'&&(
-        <Card style={{marginBottom:14,padding:'12px 16px'}}>
-          <div style={{display:'flex',gap:10,alignItems:'center'}}>
-            <span style={{color:C.txs,fontSize:12}}>View:</span>
-            <select value={selectedUser} onChange={e=>setSelectedUser(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 12px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
-              <option value="">All Employees</option>
-              {employees.map(e=><option key={e._id} value={e._id}>{e.name}</option>)}
-            </select>
-          </div>
-        </Card>
-      )}
-
-      {loading?<Spinner />:view==='monthly'?(
-        <div>
-          {monthlyData.map(userData=>(
-            <div key={userData.user._id} style={{marginBottom:24}}>
-              {/* Employee header + summary */}
-              {isAdmin&&!selectedUser&&(
-                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
-                  <Avatar name={userData.user.name} size={32} />
-                  <div>
-                    <div style={{color:C.tx,fontWeight:700,fontSize:14}}>{userData.user.name}</div>
-                    <div style={{color:C.txs,fontSize:11}}>{userData.user.jobTitle||userData.user.email}</div>
-                  </div>
-                </div>
-              )}
-
-              {/* Summary stats */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:14}}>
-                <StatCard icon="✅" label="Present" value={userData.summary.present} color={C.ok} />
-                <StatCard icon="⏰" label="Late" value={userData.summary.late} color={C.warn} />
-                <StatCard icon="❌" label="Absent" value={userData.summary.absent} color={C.err} />
-                <StatCard icon="🎉" label="Holidays" value={userData.summary.holiday} color={C.acc} />
-              </div>
-
-              {/* Calendar grid */}
-              <Card style={{padding:16}}>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4,marginBottom:8}}>
-                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>(
-                    <div key={d} style={{textAlign:'center',color:C.txs,fontSize:10,fontWeight:700,padding:'4px 0'}}>{d}</div>
-                  ))}
-                </div>
-                {/* Empty cells for first day offset */}
-                <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4}}>
-                  {Array(new Date(`${month}-01`).getDay()).fill(null).map((_,i)=>(
-                    <div key={`empty-${i}`} />
-                  ))}
-                  {userData.days.map(day=>(
-                    <div key={day.date} title={`${day.date}${day.note?'\n'+day.note:''}`} style={{background:stBg[day.status]||'transparent',borderRadius:8,padding:'6px 4px',textAlign:'center',cursor:'default',border:`1px solid ${day.status==='future'?C.bdr:'transparent'}`}}>
-                      <div style={{color:day.status==='future'?C.txm:C.tx,fontSize:12,fontWeight:700}}>{day.day}</div>
-                      <div style={{fontSize:9,color:day.status==='present'?C.ok:day.status==='late'?C.warn:day.status==='absent'?C.err:day.status==='holiday'?C.acc:C.txm,fontWeight:600,textTransform:'uppercase',marginTop:2}}>
-                        {day.status==='future'?'':day.status==='weekend'?'Off':day.status==='present'?'In':day.status==='late'?'Late':day.status==='absent'?'Out':day.status==='holiday'?'Hol':''}
-                      </div>
-                      {day.checkIn&&<div style={{fontSize:8,color:C.txs,marginTop:1}}>{fmt(day.checkIn)}</div>}
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              {/* Holidays list */}
-              {holidays.length>0&&(
-                <Card style={{marginTop:12,padding:12}}>
-                  <div style={{color:C.tx,fontSize:12,fontWeight:700,marginBottom:8}}>🎉 Holidays this month</div>
-                  {holidays.map(h=>(
-                    <div key={h._id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:`1px solid ${C.bdr}`}}>
-                      <div>
-                        <span style={{color:C.tx,fontSize:12,fontWeight:600}}>{h.name}</span>
-                        <span style={{color:C.txs,fontSize:11,marginLeft:8}}>{h.date}</span>
-                      </div>
-                      {isAdmin&&<Btn size="sm" variant="danger" onClick={()=>handleDeleteHoliday(h._id)}>Remove</Btn>}
-                    </div>
-                  ))}
-                </Card>
-              )}
-            </div>
-          ))}
-        </div>
-      ):(
-        /* Daily view */
-        <div>
-          {isAdmin&&(
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:18}}>
-              <StatCard icon="✅" label="Present" value={dailyAtt.filter(a=>['present','late'].includes(a.status)).length} color={C.ok} />
-              <StatCard icon="⏰" label="Late" value={dailyAtt.filter(a=>a.status==='late').length} color={C.warn} />
-              <StatCard icon="❌" label="Absent" value={dailyAtt.filter(a=>a.status==='absent').length} color={C.err} />
-            </div>
-          )}
-          <Card style={{padding:0}}>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
-                {[...(isAdmin?['Employee']:[]),'Date','Check In','Check Out','Hours','Status','Note'].map(h=>(
-                  <th key={h} style={{padding:'11px 16px',textAlign:'left',color:C.txm,fontSize:10,fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase'}}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {dailyAtt.length===0
-                  ?<tr><td colSpan={7} style={{padding:32,textAlign:'center',color:C.txm}}>No records for {date}</td></tr>
-                  :dailyAtt.map((a,i)=>(
-                    <tr key={a._id} style={{borderBottom:i<dailyAtt.length-1?`1px solid ${C.bdr}`:'none'}}
-                      onMouseEnter={e=>e.currentTarget.style.background=C.alt}
-                      onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                      {isAdmin&&<td style={{padding:'11px 16px'}}><div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={a.user?.name||'?'} size={24} /><span style={{color:C.tx,fontSize:12}}>{a.user?.name||'—'}</span></div></td>}
-                      <td style={{padding:'11px 16px',color:C.txs,fontSize:12}}>{a.date}</td>
-                      <td style={{padding:'11px 16px',color:C.tx,fontSize:12,fontWeight:600}}>{fmt(a.checkIn)}</td>
-                      <td style={{padding:'11px 16px',color:C.txs,fontSize:12}}>{fmt(a.checkOut)}</td>
-                      <td style={{padding:'11px 16px',color:C.tx,fontSize:12}}>{a.totalHours?a.totalHours.toFixed(1)+' hrs':'Active'}</td>
-                      <td style={{padding:'11px 16px'}}><Badge label={a.status} color={stC[a.status]||'gray'} /></td>
-                      <td style={{padding:'11px 16px',color:C.txs,fontSize:11}}>{a.note||'—'}</td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </Card>
-        </div>
-      )}
-
-      {/* Add Holiday Modal */}
-      <Modal open={holidayModal} onClose={()=>setHolidayModal(false)} title="Add Holiday">
-        <Input label="Date" value={holidayForm.date} onChange={v=>setHolidayForm(p=>({...p,date:v}))} type="date" required />
-        <Input label="Holiday Name" value={holidayForm.name} onChange={v=>setHolidayForm(p=>({...p,name:v}))} placeholder="e.g. Eid Al Fitr" required />
-        <Select label="Type" value={holidayForm.type} onChange={v=>setHolidayForm(p=>({...p,type:v}))} options={[{value:'holiday',label:'Holiday'},{value:'workday',label:'Working Day'}]} />
-        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-          <Btn variant="outline" onClick={()=>setHolidayModal(false)}>Cancel</Btn>
-          <Btn onClick={handleAddHoliday}>Add Holiday</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-};
-
-
-
-// ── Work Logs ─────────────────────────────────────────────────
-const WorkLogsPage = ({user}) => {
-  const isAdmin=['admin','super_admin'].includes(user.role);
-  const [logs,setLogs]=useState([]);
-  const [employees,setEmployees]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [modal,setModal]=useState(false);
-  const [saving,setSaving]=useState(false);
-  const [toast,setToast]=useState(null);
-  const [filterUser,setFilterUser]=useState('');
-  const [filterDate,setFilterDate]=useState('');
-  const [form,setForm]=useState({description:'',hoursWorked:'',date:new Date().toISOString().split('T')[0]});
-  const [files,setFiles]=useState([]);
-  const fileInputRef=useRef(null);
-
-  const load=useCallback(async()=>{
-    try{
-      setLoading(true);
-      let q='';
-      if(filterUser) q+=`?userId=${filterUser}`;
-      if(filterDate) q+=(q?'&':'?')+`date=${filterDate}`;
-      const r=await api.get(`/worklogs${q}`);
-      setLogs(r.data||[]);
-    }catch{}finally{setLoading(false);}
-  },[filterUser,filterDate]);
-
-  useEffect(()=>{load();},[load]);
-  useEffect(()=>{
-    if(isAdmin) api.get('/users').then(r=>setEmployees(r.data||[])).catch(()=>{});
-  },[isAdmin]);
-
-  const handleSave=async()=>{
-    if(!form.description){setToast({message:'Description required',type:'error'});return;}
-    try{
-      setSaving(true);
-      const formData=new FormData();
-      formData.append('description',form.description);
-      formData.append('hoursWorked',form.hoursWorked||0);
-      formData.append('date',form.date);
-      files.forEach(f=>formData.append('files',f));
-      const token=localStorage.getItem('ems_token');
-      const r=await fetch(`${API}/api/worklogs`,{
-        method:'POST',
-        headers:{Authorization:`Bearer ${token}`},
-        body:formData,
-      });
-      const d=await r.json();
-      if(!r.ok) throw new Error(d.message);
-      setToast({message:'Work log submitted',type:'success'});
-      setModal(false);
-      setForm({description:'',hoursWorked:'',date:new Date().toISOString().split('T')[0]});
-      setFiles([]);
-      await load();
-    }catch(err){setToast({message:err.message,type:'error'});}finally{setSaving(false);}
-  };
-
-  const handleDelete=async(id)=>{
-    if(!window.confirm('Delete this work log?'))return;
-    try{
-      await api.del(`/worklogs/${id}`);
-      setToast({message:'Deleted',type:'info'});
-      await load();
-    }catch(err){setToast({message:err.message,type:'error'});}
-  };
-
-  const handleApprove=async(id)=>{
-    try{
-      await api.put(`/worklogs/${id}`,{approved:true});
-      setToast({message:'Approved',type:'success'});
-      await load();
-    }catch(err){setToast({message:err.message,type:'error'});}
-  };
-
-  const getFileIcon=(mimetype)=>{
-    if(!mimetype) return '📄';
-    if(mimetype.startsWith('image/')) return '🖼';
-    if(mimetype.includes('pdf')) return '📕';
-    if(mimetype.includes('word')) return '📘';
-    return '📄';
-  };
-
-  const formatSize=(bytes)=>bytes<1024?bytes+'B':bytes<1048576?(bytes/1024).toFixed(1)+'KB':(bytes/1048576).toFixed(1)+'MB';
-
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      
-      {/* Header */}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-        <div>
-          <h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Work Logs</h2>
-          <p style={{color:C.txm,fontSize:12,margin:0}}>{isAdmin?'All employee logs':'Submit your daily work'}</p>
-        </div>
-        <Btn onClick={()=>setModal(true)}>+ Add Work Log</Btn>
-      </div>
-
-      {/* Filters */}
-      <Card style={{marginBottom:14,padding:'12px 16px'}}>
-        <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-          {isAdmin&&(
-            <select value={filterUser} onChange={e=>setFilterUser(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'7px 12px',color:C.tx,fontSize:12,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
-              <option value="">All Employees</option>
-              {employees.map(e=><option key={e._id} value={e._id}>{e.name}</option>)}
-            </select>
-          )}
-          <input type="date" value={filterDate} onChange={e=>setFilterDate(e.target.value)} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'7px 12px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />
-          <Btn variant="ghost" size="sm" onClick={()=>{setFilterUser('');setFilterDate('');}}>Clear</Btn>
-          <span style={{color:C.txs,fontSize:11,marginLeft:'auto'}}>{logs.length} logs</span>
-        </div>
-      </Card>
-
-      {loading?<Spinner />:logs.length===0
-        ?<Card><p style={{color:C.txm,textAlign:'center',fontSize:13,padding:20}}>No work logs found.</p></Card>
-        :(
-          <div style={{display:'flex',flexDirection:'column',gap:12}}>
-            {logs.map(l=>(
-              <Card key={l._id}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12}}>
-                  <div style={{display:'flex',gap:12,flex:1}}>
-                    {isAdmin&&<Avatar name={l.user?.name||'?'} size={36} />}
-                    <div style={{flex:1}}>
-                      {isAdmin&&<div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>{l.user?.name}</div>}
-                      <div style={{color:C.txs,fontSize:12,lineHeight:1.7,marginBottom:8}}>{l.description}</div>
-                      
-                      {/* Files */}
-                      {l.files&&l.files.length>0&&(
-                        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}>
-                          {l.files.map((f,i)=>(
-                            <a key={i} href={`${API}${f.url}`} target="_blank" rel="noopener noreferrer"
-                              style={{display:'flex',alignItems:'center',gap:5,background:C.alt,borderRadius:8,padding:'5px 10px',textDecoration:'none',border:`1px solid ${C.bdr}`}}>
-                              <span style={{fontSize:14}}>{getFileIcon(f.mimetype)}</span>
-                              <span style={{color:C.tx,fontSize:11,fontWeight:600}}>{f.originalName}</span>
-                              <span style={{color:C.txs,fontSize:10}}>({formatSize(f.size)})</span>
-                            </a>
-                          ))}
-                        </div>
-                      )}
-
-                      <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-                        <span style={{color:C.txm,fontSize:11}}>📅 {l.date}</span>
-                        {l.hoursWorked>0&&<span style={{color:C.txm,fontSize:11}}>⏱ {l.hoursWorked} hrs</span>}
-                        {l.approved
-                          ?<Badge label="Approved" color="green" />
-                          :<Badge label="Pending" color="yellow" />
-                        }
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div style={{display:'flex',gap:6,flexShrink:0}}>
-                    {isAdmin&&!l.approved&&(
-                      <Btn size="sm" variant="success" onClick={()=>handleApprove(l._id)}>✓ Approve</Btn>
-                    )}
-                    {(isAdmin||l.user?._id===user.id||l.user===user.id)&&(
-                      <Btn size="sm" variant="danger" onClick={()=>handleDelete(l._id)}>Delete</Btn>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )
-      }
-
-      {/* Add Work Log Modal */}
-      <Modal open={modal} onClose={()=>{setModal(false);setFiles([]);}} title="Submit Work Log" width={520}>
-        <Input label="Date" value={form.date} onChange={v=>setForm(p=>({...p,date:v}))} type="date" required />
-        <div style={{marginBottom:14}}>
-          <label style={{display:'block',color:C.txs,fontSize:11,fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:5}}>What did you work on? *</label>
-          <textarea value={form.description} onChange={e=>setForm(p=>({...p,description:e.target.value}))} placeholder="Describe your work today..."
-            style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 13px',color:C.tx,fontSize:12,outline:'none',resize:'vertical',minHeight:100,boxSizing:'border-box',fontFamily:'inherit'}} />
-        </div>
-        <Input label="Hours Worked" value={form.hoursWorked} onChange={v=>setForm(p=>({...p,hoursWorked:v}))} type="number" placeholder="e.g. 8" />
-        
-        {/* File Upload */}
-        <div style={{marginBottom:14}}>
-          <label style={{display:'block',color:C.txs,fontSize:11,fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:5}}>Attach Files (PDF, Images, Docs)</label>
-          <div onClick={()=>fileInputRef.current?.click()} style={{border:`2px dashed ${C.bdr}`,borderRadius:8,padding:'16px',textAlign:'center',cursor:'pointer',background:C.alt}}
-            onMouseEnter={e=>e.currentTarget.style.borderColor=C.acc} onMouseLeave={e=>e.currentTarget.style.borderColor=C.bdr}>
-            <div style={{fontSize:24,marginBottom:4}}>📎</div>
-            <div style={{color:C.txs,fontSize:12}}>Click to attach files</div>
-            <div style={{color:C.txm,fontSize:10,marginTop:2}}>Max 5 files, 20MB each</div>
-          </div>
-          <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif" style={{display:'none'}} onChange={e=>setFiles(Array.from(e.target.files))} />
-          {files.length>0&&(
-            <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
-              {files.map((f,i)=>(
-                <div key={i} style={{background:C.alt,borderRadius:6,padding:'4px 8px',display:'flex',alignItems:'center',gap:5,border:`1px solid ${C.bdr}`}}>
-                  <span style={{color:C.tx,fontSize:11}}>{f.name}</span>
-                  <button onClick={()=>setFiles(files.filter((_,fi)=>fi!==i))} style={{background:'none',border:'none',color:C.err,cursor:'pointer',fontSize:12}}>×</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-          <Btn variant="outline" onClick={()=>{setModal(false);setFiles([]);}}>Cancel</Btn>
-          <Btn onClick={handleSave} disabled={saving}>{saving?'Submitting...':'Submit Log'}</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-};
-
-// ── Salary ────────────────────────────────────────────────────
-const SalaryPage = ({user}) => {
-  const isAdmin=['admin','super_admin'].includes(user.role);
-  const [salaries,setSalaries]=useState([]);
-  const [employees,setEmployees]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [modal,setModal]=useState(false);
-  const [saving,setSaving]=useState(false);
-  const [toast,setToast]=useState(null);
-  const [editId,setEditId]=useState(null);
-  const [form,setForm]=useState({user:'',month:new Date().toISOString().slice(0,7),amount:'',status:'pending',note:''});
-
-  const load=useCallback(async()=>{
-    try{setLoading(true);const r=await api.get('/salaries');setSalaries(r.data||[]);if(isAdmin){const ur=await api.get('/users');setEmployees(ur.data||[]);}}
-    catch{}finally{setLoading(false);}
-  },[isAdmin]);
-  useEffect(()=>{load();},[load]);
-
-  const handleSave=async()=>{
-    if(!form.amount){setToast({message:'Amount required',type:'error'});return;}
-    try{
-      setSaving(true);
-      if(editId){await api.put(`/salaries/${editId}`,{status:form.status,note:form.note});setToast({message:'Updated',type:'success'});}
-      else{if(!form.user){setToast({message:'Select employee',type:'error'});return;}await api.post('/salaries',form);setToast({message:'Salary created',type:'success'});}
-      setModal(false);setEditId(null);setForm({user:'',month:new Date().toISOString().slice(0,7),amount:'',status:'pending',note:''});await load();
-    }catch(err){setToast({message:err.message,type:'error'});}finally{setSaving(false);}
-  };
-
-  const stC={paid:'green',pending:'yellow',due:'red'};
-
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-        <div><h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Salary</h2><p style={{color:C.txm,fontSize:12,margin:0}}>{salaries.length} records</p></div>
-        {isAdmin&&<Btn onClick={()=>{setEditId(null);setForm({user:'',month:new Date().toISOString().slice(0,7),amount:'',status:'pending',note:''});setModal(true);}}>+ Add Salary</Btn>}
-      </div>
-      {loading?<Spinner />:(
-        <Card style={{padding:0}}>
-          <table style={{width:'100%',borderCollapse:'collapse'}}>
-            <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
-              {[...(isAdmin?['Employee']:[]),'Month','Amount','Status','Note',...(isAdmin?['Actions']:[])].map(h=>(
-                <th key={h} style={{padding:'11px 16px',textAlign:'left',color:C.txm,fontSize:10,fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase'}}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {salaries.length===0?<tr><td colSpan={6} style={{padding:32,textAlign:'center',color:C.txm}}>No salary records yet</td></tr>
-              :salaries.map((s,i)=>(
-                <tr key={s._id} style={{borderBottom:i<salaries.length-1?`1px solid ${C.bdr}`:'none'}}
-                  onMouseEnter={e=>e.currentTarget.style.background=C.alt} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                  {isAdmin&&<td style={{padding:'11px 16px'}}><div style={{display:'flex',alignItems:'center',gap:7}}><Avatar name={s.user?.name||'?'} size={24} /><span style={{color:C.tx,fontSize:12}}>{s.user?.name||'—'}</span></div></td>}
-                  <td style={{padding:'11px 16px',color:C.tx,fontSize:12,fontWeight:600}}>{s.month}</td>
-                  <td style={{padding:'11px 16px',color:C.ok,fontSize:12,fontWeight:700}}>₹{s.amount?.toLocaleString()}</td>
-                  <td style={{padding:'11px 16px'}}><Badge label={s.status} color={stC[s.status]||'gray'} /></td>
-                  <td style={{padding:'11px 16px',color:C.txs,fontSize:12}}>{s.note||'—'}</td>
-                  {isAdmin&&<td style={{padding:'11px 16px'}}><Btn size="sm" variant="ghost" onClick={()=>{setEditId(s._id);setForm({status:s.status,note:s.note||'',amount:s.amount,month:s.month,user:s.user?._id||''});setModal(true);}}>Edit</Btn></td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
-      <Modal open={modal} onClose={()=>setModal(false)} title={editId?'Update Salary':'Add Salary'}>
-        {!editId&&<Select label="Employee" value={form.user} onChange={v=>setForm(p=>({...p,user:v}))} options={[{value:'',label:'Select employee'},...employees.map(u=>({value:u._id,label:`${u.name} (${u.email})`}))]} required />}
-        {!editId&&<Input label="Month" value={form.month} onChange={v=>setForm(p=>({...p,month:v}))} type="month" required />}
-        {!editId&&<Input label="Amount (₹)" value={form.amount} onChange={v=>setForm(p=>({...p,amount:v}))} type="number" placeholder="0" required />}
-        <Select label="Status" value={form.status} onChange={v=>setForm(p=>({...p,status:v}))} options={[{value:'pending',label:'Pending'},{value:'paid',label:'Paid'},{value:'due',label:'Due'}]} required />
-        <Input label="Note (optional)" value={form.note} onChange={v=>setForm(p=>({...p,note:v}))} placeholder="Any notes..." />
-        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-          <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
-          <Btn onClick={handleSave} disabled={saving}>{saving?'Saving...':editId?'Update':'Add Salary'}</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-};
-
-// ── Buyers ────────────────────────────────────────────────────
-const BuyersPage = () => {
-  const [buyers,setBuyers]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [modal,setModal]=useState(false);
-  const [editBuyer,setEditBuyer]=useState(null);
-  const [saving,setSaving]=useState(false);
-  const [toast,setToast]=useState(null);
-  const [form,setForm]=useState({name:'',company:'',country:'UAE',email:'',phone:'',notes:''});
-
-  const load=useCallback(async()=>{try{setLoading(true);const r=await api.get('/buyers');setBuyers(r.data||[]);}catch{}finally{setLoading(false);}});
-  useEffect(()=>{load();},[]);
-
-  const handleSave=async()=>{
-    if(!form.name){setToast({message:'Name required',type:'error'});return;}
-    try{
-      setSaving(true);
-      if(editBuyer){await api.put(`/buyers/${editBuyer._id}`,form);}
-      else{await api.post('/buyers',form);}
-      setToast({message:'Saved',type:'success'});setModal(false);setEditBuyer(null);setForm({name:'',company:'',country:'UAE',email:'',phone:'',notes:''});load();
-    }catch(err){setToast({message:err.message,type:'error'});}finally{setSaving(false);}
-  };
-
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-        <div><h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Buyers</h2><p style={{color:C.txm,fontSize:12,margin:0}}>{buyers.length} buyers</p></div>
-        <Btn onClick={()=>{setEditBuyer(null);setForm({name:'',company:'',country:'UAE',email:'',phone:'',notes:''});setModal(true);}}>+ Add Buyer</Btn>
-      </div>
-      {loading?<Spinner />:(
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))',gap:12}}>
-          {buyers.length===0?<Card><p style={{color:C.txm,textAlign:'center',fontSize:13}}>No buyers yet.</p></Card>
-          :buyers.map(b=>(
-            <Card key={b._id}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
-                <div><div style={{color:C.tx,fontWeight:700,fontSize:13}}>{b.name}</div><div style={{color:C.txs,fontSize:11}}>{b.company}</div></div>
-                <Badge label={b.country} color="blue" />
-              </div>
-              {b.email&&<div style={{color:C.txs,fontSize:11,marginBottom:3}}>✉ {b.email}</div>}
-              {b.phone&&<div style={{color:C.txs,fontSize:11,marginBottom:8}}>📞 {b.phone}</div>}
-              <Btn size="sm" variant="ghost" onClick={()=>{setEditBuyer(b);setForm({name:b.name,company:b.company||'',country:b.country,email:b.email||'',phone:b.phone||'',notes:b.notes||''});setModal(true);}}>Edit</Btn>
-            </Card>
-          ))}
-        </div>
-      )}
-      <Modal open={modal} onClose={()=>setModal(false)} title={editBuyer?'Edit Buyer':'Add Buyer'}>
-        <Input label="Name" value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} placeholder="Buyer name" required />
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-          <Input label="Company" value={form.company} onChange={v=>setForm(p=>({...p,company:v}))} placeholder="Company name" />
-          <Input label="Country" value={form.country} onChange={v=>setForm(p=>({...p,country:v}))} placeholder="UAE" />
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-          <Input label="Email" value={form.email} onChange={v=>setForm(p=>({...p,email:v}))} type="email" placeholder="buyer@email.com" />
-          <Input label="Phone" value={form.phone} onChange={v=>setForm(p=>({...p,phone:v}))} placeholder="+971..." />
-        </div>
-        <Input label="Notes" value={form.notes} onChange={v=>setForm(p=>({...p,notes:v}))} placeholder="Any notes..." />
-        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-          <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
-          <Btn onClick={handleSave} disabled={saving}>{saving?'Saving...':'Save Buyer'}</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-};
-
-// ── Orders ────────────────────────────────────────────────────
-const OrdersPage = () => {
-  const [orders,setOrders]=useState([]);
-  const [buyers,setBuyers]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [modal,setModal]=useState(false);
-  const [saving,setSaving]=useState(false);
-  const [toast,setToast]=useState(null);
-  const [editOrder,setEditOrder]=useState(null);
-  const [form,setForm]=useState({buyer:'',product:'',quantity:'',unit:'KG',price:'',status:'draft',paymentStatus:'pending',notes:''});
-
-  const load=useCallback(async()=>{
-    try{setLoading(true);const [or,br]=await Promise.all([api.get('/orders'),api.get('/buyers')]);setOrders(or.data||[]);setBuyers(br.data||[]);}
-    catch{}finally{setLoading(false);}
-  },[]);
-  useEffect(()=>{load();},[load]);
-
-  const handleSave=async()=>{
-    if(!form.buyer||!form.product||!form.quantity||!form.price){setToast({message:'Fill required fields',type:'error'});return;}
-    try{
-      setSaving(true);
-      if(editOrder){await api.put(`/orders/${editOrder._id}`,form);}else{await api.post('/orders',form);}
-      setToast({message:'Saved',type:'success'});setModal(false);setEditOrder(null);setForm({buyer:'',product:'',quantity:'',unit:'KG',price:'',status:'draft',paymentStatus:'pending',notes:''});load();
-    }catch(err){setToast({message:err.message,type:'error'});}finally{setSaving(false);}
-  };
-
-  const stC={draft:'gray',confirmed:'blue',shipped:'yellow',delivered:'green',cancelled:'red'};
-  const paC={pending:'yellow',partial:'purple',paid:'green',overdue:'red'};
-
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
-        <div><h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:'0 0 3px'}}>Orders</h2><p style={{color:C.txm,fontSize:12,margin:0}}>{orders.length} orders</p></div>
-        <Btn onClick={()=>{setEditOrder(null);setForm({buyer:'',product:'',quantity:'',unit:'KG',price:'',status:'draft',paymentStatus:'pending',notes:''});setModal(true);}}>+ New Order</Btn>
-      </div>
-      {loading?<Spinner />:(
-        <Card style={{padding:0}}>
-          <table style={{width:'100%',borderCollapse:'collapse'}}>
-            <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
-              {['Order#','Buyer','Product','Qty','Price','Value','Status','Payment','Actions'].map(h=>(
-                <th key={h} style={{padding:'10px 14px',textAlign:'left',color:C.txm,fontSize:9,fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase'}}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {orders.length===0?<tr><td colSpan={9} style={{padding:32,textAlign:'center',color:C.txm}}>No orders yet</td></tr>
-              :orders.map((o,i)=>(
-                <tr key={o._id} style={{borderBottom:i<orders.length-1?`1px solid ${C.bdr}`:'none'}}
-                  onMouseEnter={e=>e.currentTarget.style.background=C.alt} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                  <td style={{padding:'10px 14px',color:C.acc,fontSize:11,fontWeight:700}}>{o.orderNumber}</td>
-                  <td style={{padding:'10px 14px',color:C.tx,fontSize:11}}>{o.buyer?.name||'—'}</td>
-                  <td style={{padding:'10px 14px',color:C.tx,fontSize:11}}>{o.product}</td>
-                  <td style={{padding:'10px 14px',color:C.txs,fontSize:11}}>{o.quantity} {o.unit}</td>
-                  <td style={{padding:'10px 14px',color:C.txs,fontSize:11}}>₹{o.price}</td>
-                  <td style={{padding:'10px 14px',color:C.ok,fontSize:11,fontWeight:700}}>₹{o.totalValue?.toLocaleString()}</td>
-                  <td style={{padding:'10px 14px'}}><Badge label={o.status} color={stC[o.status]||'gray'} /></td>
-                  <td style={{padding:'10px 14px'}}><Badge label={o.paymentStatus} color={paC[o.paymentStatus]||'gray'} /></td>
-                  <td style={{padding:'10px 14px'}}><Btn size="sm" variant="ghost" onClick={()=>{setEditOrder(o);setForm({buyer:o.buyer?._id||'',product:o.product,quantity:o.quantity,unit:o.unit,price:o.price,status:o.status,paymentStatus:o.paymentStatus,notes:o.notes||''});setModal(true);}}>Edit</Btn></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
-      <Modal open={modal} onClose={()=>setModal(false)} title={editOrder?'Edit Order':'New Order'} width={520}>
-        <Select label="Buyer" value={form.buyer} onChange={v=>setForm(p=>({...p,buyer:v}))} options={[{value:'',label:'Select buyer'},...buyers.map(b=>({value:b._id,label:`${b.name} (${b.company||b.country})`}))]} required />
-        <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr',gap:11}}>
-          <Input label="Product" value={form.product} onChange={v=>setForm(p=>({...p,product:v}))} placeholder="e.g. Cumin Seeds" required />
-          <Input label="Quantity" value={form.quantity} onChange={v=>setForm(p=>({...p,quantity:v}))} type="number" placeholder="0" required />
-          <Input label="Unit" value={form.unit} onChange={v=>setForm(p=>({...p,unit:v}))} placeholder="KG" />
-        </div>
-        <Input label="Price per unit (₹)" value={form.price} onChange={v=>setForm(p=>({...p,price:v}))} type="number" placeholder="0" required />
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11}}>
-          <Select label="Status" value={form.status} onChange={v=>setForm(p=>({...p,status:v}))} options={[{value:'draft',label:'Draft'},{value:'confirmed',label:'Confirmed'},{value:'shipped',label:'Shipped'},{value:'delivered',label:'Delivered'},{value:'cancelled',label:'Cancelled'}]} />
-          <Select label="Payment" value={form.paymentStatus} onChange={v=>setForm(p=>({...p,paymentStatus:v}))} options={[{value:'pending',label:'Pending'},{value:'partial',label:'Partial'},{value:'paid',label:'Paid'},{value:'overdue',label:'Overdue'}]} />
-        </div>
-        <Input label="Notes" value={form.notes} onChange={v=>setForm(p=>({...p,notes:v}))} placeholder="Any notes..." />
-        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-          <Btn variant="outline" onClick={()=>setModal(false)}>Cancel</Btn>
-          <Btn onClick={handleSave} disabled={saving}>{saving?'Saving...':'Save Order'}</Btn>
-        </div>
-      </Modal>
-    </div>
-  );
-};
-
-// ── Analytics ─────────────────────────────────────────────────
-const AnalyticsPage = ({user}) => {
-  const [data,setData]=useState(null);
-  const [attData,setAttData]=useState([]);
-  const [monthlyAtt,setMonthlyAtt]=useState([]);
-  const [orderStats,setOrderStats]=useState([]);
-  const [salaryStats,setSalaryStats]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [month,setMonth]=useState(new Date().toISOString().slice(0,7));
-
-  useEffect(()=>{
-    const load=async()=>{
-      try{
-        const [d,a,att,sal,ord]=await Promise.all([
-          api.get('/dashboard'),
-          api.get('/attendance/summary'),
-          api.get(`/attendance/monthly?month=${month}`),
-          api.get('/salaries'),
-          api.get('/orders'),
+      try {
+        const [empRes, orderRes, salaryRes] = await Promise.allSettled([
+          fetch(`${API}/api/employees`).then(r => r.json()),
+          fetch(`${API}/api/orders`).then(r => r.json()),
+          fetch(`${API}/api/salary`).then(r => r.json()),
         ]);
-        setData(d.data);
-        setAttData([
-          {name:'Present',value:a.data.present||0},
-          {name:'Late',value:a.data.late||0},
-          {name:'Absent',value:a.data.absent||0},
-          {name:'Half Day',value:a.data.halfDay||0},
-        ]);
-        // Build monthly attendance bar chart data
-        if(att.data&&att.data.length>0){
-          const summary=att.data[0]?.summary||{};
-          setMonthlyAtt([
-            {name:'Present',value:summary.present||0,fill:C.ok},
-            {name:'Late',value:summary.late||0,fill:C.warn},
-            {name:'Absent',value:summary.absent||0,fill:C.err},
-            {name:'Holiday',value:summary.holiday||0,fill:C.acc},
-          ]);
-        }
-        // Salary stats
-        const salaries=sal.data||[];
-        setSalaryStats([
-          {name:'Paid',value:salaries.filter(s=>s.status==='paid').length,fill:C.ok},
-          {name:'Pending',value:salaries.filter(s=>s.status==='pending').length,fill:C.warn},
-          {name:'Due',value:salaries.filter(s=>s.status==='due').length,fill:C.err},
-        ]);
-        // Order stats
-        const orders=ord.data||[];
-        const oStats={draft:0,confirmed:0,shipped:0,delivered:0,cancelled:0};
-        orders.forEach(o=>oStats[o.status]=(oStats[o.status]||0)+1);
-        setOrderStats(Object.entries(oStats).map(([name,value])=>({name:name.charAt(0).toUpperCase()+name.slice(1),value})));
-      }catch{}finally{setLoading(false);}
+        const employees = empRes.status === "fulfilled" ? (empRes.value?.employees || empRes.value || []) : [];
+        const orders = orderRes.status === "fulfilled" ? (orderRes.value?.orders || orderRes.value || []) : [];
+        const salaries = salaryRes.status === "fulfilled" ? (salaryRes.value?.salaries || salaryRes.value || []) : [];
+        setStats({
+          totalEmp: employees.length,
+          activeEmp: employees.filter(e => e.status === "active" || e.isActive).length,
+          totalOrders: orders.length,
+          totalSalary: salaries.reduce((s, x) => s + (x.totalSalary || x.amount || 0), 0),
+        });
+        setRecentActivity(orders.slice(0, 6));
+      } catch {
+        addToast("Failed to load dashboard data", "error");
+      }
+      setLoading(false);
     };
     load();
-  },[month]);
+  }, []);
 
-  if(loading) return <Spinner />;
-  const COLORS=[C.ok,C.warn,C.err,C.purple,C.acc,C.teal];
+  const fmt = n => `₹${(n || 0).toLocaleString("en-IN")}`;
 
   return (
-    <div style={{padding:28}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:22}}>
-        <h2 style={{color:C.tx,fontSize:19,fontWeight:800,margin:0}}>📊 Analytics</h2>
-        <input type="month" value={month} onChange={e=>setMonth(e.target.value)} style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'6px 12px',color:C.tx,fontSize:12,outline:'none',fontFamily:'inherit'}} />
+    <PageShell title="Dashboard" sub="Overview of your workspace">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginBottom: 28 }}>
+        <StatCard label="Total Employees" value={loading ? "—" : stats.totalEmp} sub="registered" delta="4.2%" deltaDir="up" color={T.accent} icon={Users} loading={loading} />
+        <StatCard label="Active Staff" value={loading ? "—" : stats.activeEmp} sub="on payroll" delta="1.8%" deltaDir="up" color={T.success} icon={Activity} loading={loading} />
+        <StatCard label="Total Orders" value={loading ? "—" : stats.totalOrders} sub="all time" delta="12%" deltaDir="up" color={T.purple} icon={Package} loading={loading} />
+        <StatCard label="Payroll Disbursed" value={loading ? "—" : fmt(stats.totalSalary)} sub="total processed" delta="3.1%" deltaDir="down" color={T.warning} icon={Wallet} loading={loading} />
       </div>
 
-      {/* Top Stats */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:14,marginBottom:22}}>
-        <StatCard icon="👥" label="Total Employees" value={data?.users} color={C.acc} />
-        <StatCard icon="✅" label="Present Today" value={data?.presentToday} color={C.ok} />
-        <StatCard icon="💵" label="Pending Salaries" value={data?.pendingSalaries} color={C.warn} />
-        <StatCard icon="📦" label="Total Orders" value={data?.totalOrders} color={C.purple} />
-      </div>
-
-      {/* Row 1: Attendance Pie + Monthly Bar */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18,marginBottom:18}}>
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>📅 Attendance This Month</h3>
-          {attData.every(d=>d.value===0)
-            ?<div style={{textAlign:'center',color:C.txm,padding:40,fontSize:12}}>No attendance data yet</div>
-            :<ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={attData} cx="50%" cy="50%" outerRadius={75} innerRadius={35} dataKey="value" label={({name,value})=>value>0?`${name}: ${value}`:''}>
-                  {attData.map((_,i)=><Cell key={i} fill={COLORS[i]} />)}
-                </Pie>
-                <Tooltip contentStyle={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tx}} />
-              </PieChart>
-            </ResponsiveContainer>
-          }
-          <div style={{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center',marginTop:8}}>
-            {attData.map((d,i)=>(
-              <div key={d.name} style={{display:'flex',alignItems:'center',gap:4}}>
-                <div style={{width:8,height:8,borderRadius:'50%',background:COLORS[i]}} />
-                <span style={{color:C.txs,fontSize:11}}>{d.name}: <strong style={{color:C.tx}}>{d.value}</strong></span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>📊 Monthly Breakdown</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={monthlyAtt} barSize={32}>
-              <XAxis dataKey="name" tick={{fill:C.txs,fontSize:11}} axisLine={false} tickLine={false} />
-              <YAxis tick={{fill:C.txs,fontSize:10}} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tx}} />
-              <Bar dataKey="value" radius={[6,6,0,0]}>
-                {monthlyAtt.map((entry,i)=><Cell key={i} fill={entry.fill} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-
-      {/* Row 2: Salary Stats + Order Stats */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18,marginBottom:18}}>
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>💵 Salary Status</h3>
-          {salaryStats.every(d=>d.value===0)
-            ?<div style={{textAlign:'center',color:C.txm,padding:40,fontSize:12}}>No salary records yet</div>
-            :<>
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={salaryStats} barSize={40}>
-                  <XAxis dataKey="name" tick={{fill:C.txs,fontSize:11}} axisLine={false} tickLine={false} />
-                  <YAxis tick={{fill:C.txs,fontSize:10}} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tx}} />
-                  <Bar dataKey="value" radius={[6,6,0,0]}>
-                    {salaryStats.map((entry,i)=><Cell key={i} fill={entry.fill} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div style={{display:'flex',gap:14,justifyContent:'center',marginTop:8}}>
-                {salaryStats.map(s=>(
-                  <div key={s.name} style={{textAlign:'center'}}>
-                    <div style={{color:s.fill,fontSize:20,fontWeight:800}}>{s.value}</div>
-                    <div style={{color:C.txs,fontSize:11}}>{s.name}</div>
-                  </div>
-                ))}
-              </div>
-            </>
-          }
-        </Card>
-
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>📦 Order Status</h3>
-          {orderStats.every(d=>d.value===0)
-            ?<div style={{textAlign:'center',color:C.txm,padding:40,fontSize:12}}>No orders yet</div>
-            :<>
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie data={orderStats.filter(d=>d.value>0)} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({name,value})=>`${name}: ${value}`}>
-                    {orderStats.map((_,i)=><Cell key={i} fill={COLORS[i]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tx}} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',marginTop:8}}>
-                {orderStats.filter(d=>d.value>0).map((d,i)=>(
-                  <div key={d.name} style={{display:'flex',alignItems:'center',gap:4}}>
-                    <div style={{width:8,height:8,borderRadius:'50%',background:COLORS[i]}} />
-                    <span style={{color:C.txs,fontSize:11}}>{d.name}: <strong style={{color:C.tx}}>{d.value}</strong></span>
-                  </div>
-                ))}
-              </div>
-            </>
-          }
-        </Card>
-      </div>
-
-      {/* Row 3: Quick Summary */}
-      <Card>
-        <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>📋 Quick Summary</h3>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:16}}>
-          {[
-            {label:'Total Employees',val:data?.users,color:C.acc,icon:'👥'},
-            {label:'Present Today',val:data?.presentToday,color:C.ok,icon:'✅'},
-            {label:'Pending Salaries',val:data?.pendingSalaries,color:C.warn,icon:'⏳'},
-            {label:'Total Orders',val:data?.totalOrders,color:C.purple,icon:'📦'},
-          ].map(s=>(
-            <div key={s.label} style={{marginBottom:8}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                <span style={{color:C.txs,fontSize:12}}>{s.icon} {s.label}</span>
-                <span style={{color:s.color,fontWeight:800,fontSize:14}}>{s.val??0}</span>
-              </div>
-              <div style={{background:C.bdr,borderRadius:4,height:5,overflow:'hidden'}}>
-                <div style={{width:`${Math.min(100,(s.val||0)/Math.max(1,data?.users||1)*100)}%`,height:'100%',background:s.color,borderRadius:4,transition:'width .5s'}} />
-              </div>
-            </div>
-          ))}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 16 }}>
+        <div>
+          <SectionHeading title="Recent Orders" sub="Latest commercial activity" />
+          <Table
+            loading={loading}
+            columns={[
+              { key: "orderId", label: "Order ID", width: "30%", render: v => <span style={{ fontFamily: "monospace", fontSize: 12, color: T.textSecondary }}>#{v || "—"}</span> },
+              { key: "buyerName", label: "Buyer" },
+              { key: "totalAmount", label: "Amount", render: v => <span style={{ fontWeight: 600 }}>{v ? `₹${Number(v).toLocaleString("en-IN")}` : "—"}</span> },
+              { key: "status", label: "Status", render: v => {
+                const map = { pending: [T.warning, "Pending"], completed: [T.success, "Completed"], cancelled: [T.danger, "Cancelled"] };
+                const [c, l] = map[v?.toLowerCase()] || [T.textSecondary, v || "—"];
+                return <Badge label={l} color={c} />;
+              }},
+            ]}
+            rows={recentActivity}
+            emptyText="No orders yet"
+          />
         </div>
-      </Card>
-    </div>
-  );
-};
 
-// ── Company Settings ──────────────────────────────────────────
-const CompanyPage = () => {
-  const [company,setCompany]=useState({name:'',website:'',email:'',phone:'',address:'',officeStartHour:9,officeStartMinute:0,gracePeriodMinutes:15,logoUrl:''});
-  const [loading,setLoading]=useState(true);
-  const [saving,setSaving]=useState(false);
-  const [toast,setToast]=useState(null);
-
-  useEffect(()=>{api.get('/company').then(d=>setCompany(d.data)).catch(()=>{}).finally(()=>setLoading(false));},[]);
-
-  const handleSave=async()=>{
-    try{setSaving(true);await api.put('/company',company);setToast({message:'Company settings saved',type:'success'});}
-    catch(err){setToast({message:err.message,type:'error'});}finally{setSaving(false);}
-  };
-
-  if(loading) return <Spinner />;
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <h2 style={{color:C.tx,fontSize:19,fontWeight:800,marginBottom:20}}>Company Settings</h2>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>Branding</h3>
-          <Input label="Company Name" value={company.name} onChange={v=>setCompany(p=>({...p,name:v}))} placeholder="Your Company Name" required />
-          <Input label="Website URL" value={company.website} onChange={v=>setCompany(p=>({...p,website:v}))} placeholder="https://yourcompany.com" />
-          <Input label="Logo URL" value={company.logoUrl} onChange={v=>setCompany(p=>({...p,logoUrl:v}))} placeholder="https://..." />
-          {company.logoUrl&&<div style={{marginBottom:14}}><img src={company.logoUrl} alt="logo preview" style={{height:48,objectFit:'contain',borderRadius:8}} /></div>}
-          <Input label="Email" value={company.email} onChange={v=>setCompany(p=>({...p,email:v}))} type="email" placeholder="info@company.com" />
-          <Input label="Phone" value={company.phone} onChange={v=>setCompany(p=>({...p,phone:v}))} placeholder="+91..." />
-        </Card>
-       <Card>
-  <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>⏰ Attendance Settings</h3>
-  <div style={{marginBottom:14}}>
-    <label style={{display:'block',color:C.txs,fontSize:11,fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:5}}>Office Start Time</label>
-    <div style={{display:'flex',gap:8,alignItems:'center'}}>
-      <select value={company.officeStartHour%12||12} onChange={e=>{const h=parseInt(e.target.value);const isPM=company.officeStartHour>=12;setCompany(p=>({...p,officeStartHour:isPM?h===12?12:h+12:h===12?0:h}));}} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:13,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
-        {[12,1,2,3,4,5,6,7,8,9,10,11].map(h=><option key={h} value={h} style={{background:C.surf}}>{h}</option>)}
-      </select>
-      <select value={company.officeStartMinute} onChange={e=>setCompany(p=>({...p,officeStartMinute:parseInt(e.target.value)}))} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:13,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
-        {[0,15,30,45].map(m=><option key={m} value={m} style={{background:C.surf}}>{String(m).padStart(2,'0')}</option>)}
-      </select>
-      <select value={company.officeStartHour>=12?'PM':'AM'} onChange={e=>{const isPM=e.target.value==='PM';setCompany(p=>({...p,officeStartHour:isPM?p.officeStartHour===0?12:p.officeStartHour<=12?p.officeStartHour+12:p.officeStartHour:p.officeStartHour===12?0:p.officeStartHour>12?p.officeStartHour-12:p.officeStartHour}));}} style={{background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 12px',color:C.tx,fontSize:13,outline:'none',cursor:'pointer',fontFamily:'inherit'}}>
-        <option value="AM">AM</option>
-        <option value="PM">PM</option>
-      </select>
-    </div>
-  </div>
-  <Input label="Grace Period (minutes)" value={company.gracePeriodMinutes} onChange={v=>setCompany(p=>({...p,gracePeriodMinutes:parseInt(v)}))} type="number" placeholder="15" />
-  <div style={{background:C.accS,borderRadius:8,padding:'10px 13px',fontSize:12,color:C.acc,marginBottom:14,lineHeight:1.8}}>
-    {(()=>{const h=company.officeStartHour;const m=company.officeStartMinute;const grace=company.gracePeriodMinutes||15;const displayH=h%12||12;const ampm=h>=12?'PM':'AM';const lateMin=m+grace;const lateH=h+Math.floor(lateMin/60);const lateMDisplay=lateMin%60;const lateAmpm=lateH>=12?'PM':'AM';const lateDisplayH=lateH%12||12;return<>✅ Before <strong>{displayH}:{String(m).padStart(2,'0')} {ampm}</strong> = Present<br/>⏰ Before <strong>{lateDisplayH}:{String(lateMDisplay).padStart(2,'0')} {lateAmpm}</strong> = Late<br/>❌ After = Absent</>;})()}
-  </div>
-  <Input label="Auto Logout Hours" value={company.autoLogoutHours||10} onChange={v=>setCompany(p=>({...p,autoLogoutHours:parseInt(v)}))} type="number" placeholder="10" />
-  </Card>
-      </div>
-      <div style={{marginTop:18,display:'flex',justifyContent:'flex-end'}}>
-        <Btn onClick={handleSave} disabled={saving} size="lg">{saving?'Saving...':'Save All Settings'}</Btn>
-      </div>
-    </div>
-  );
-};
-
-// ── Audit Logs ────────────────────────────────────────────────
-const AuditPage = () => {
-  const [logs,setLogs]=useState([]);
-  const [loading,setLoading]=useState(true);
-  useEffect(()=>{api.get('/audit').then(d=>setLogs(d.data||[])).catch(()=>{}).finally(()=>setLoading(false));},[]);
-  const actionC={LOGIN:'green',LOGOUT:'gray',CREATE_EMPLOYEE:'blue',UPDATE_USER:'yellow',DELETE_USER:'red',CREATE_ORDER:'purple',UPDATE_SALARY:'yellow',SYSTEM_SETUP:'teal'};
-  return (
-    <div style={{padding:28}}>
-      <h2 style={{color:C.tx,fontSize:19,fontWeight:800,marginBottom:20}}>Audit Logs</h2>
-      {loading?<Spinner />:logs.length===0?<Card><p style={{color:C.txm,textAlign:'center',fontSize:13}}>No audit logs.</p></Card>:(
-        <Card style={{padding:0}}>
-          {logs.map((log,i)=>(
-            <div key={log._id} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 18px',borderBottom:i<logs.length-1?`1px solid ${C.bdr}`:'none'}}>
-              <div style={{width:32,height:32,borderRadius:8,background:C.accS,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,flexShrink:0}}>📋</div>
-              <div style={{flex:1}}>
-                <div style={{display:'flex',alignItems:'center',gap:7}}>
-                  <Badge label={log.action.replace(/_/g,' ')} color={actionC[log.action]||'gray'} />
-                  <span style={{color:C.txs,fontSize:11}}>by {log.user?.name||'System'}</span>
+        <div>
+          <SectionHeading title="Quick Metrics" sub="At a glance" />
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              { label: "Avg attendance rate", value: "94.2%", color: T.success, icon: CalendarCheck },
+              { label: "Open worklogs", value: "18", color: T.warning, icon: FileText },
+              { label: "Pending payments", value: "₹1,24,000", color: T.danger, icon: Wallet },
+              { label: "Active buyers", value: "32", color: T.cyan, icon: ShoppingBag },
+            ].map(m => (
+              <div key={m.label} style={{
+                background: T.surface, border: `1px solid ${T.border}`,
+                borderRadius: 10, padding: "14px 16px",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: m.color + "18", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <m.icon size={13} color={m.color} />
+                  </div>
+                  <span style={{ fontSize: 12, color: T.textSecondary }}>{m.label}</span>
                 </div>
-                {log.details&&<div style={{color:C.txm,fontSize:10,marginTop:2,fontFamily:'monospace'}}>{JSON.stringify(log.details).slice(0,80)}</div>}
-              </div>
-              <span style={{color:C.txm,fontSize:11,flexShrink:0}}>{new Date(log.createdAt).toLocaleString('en-IN')}</span>
-            </div>
-          ))}
-        </Card>
-      )}
-    </div>
-  );
-};
-
-// ── Profile ───────────────────────────────────────────────────
-const ProfilePage = ({user,setUser}) => {
-  const [form,setForm]=useState({name:user.name,jobTitle:user.jobTitle||'',department:'',phone:'',password:'',newPassword:''});
-  const [saving,setSaving]=useState(false);
-  const [toast,setToast]=useState(null);
-  const handleSave=async()=>{
-    try{setSaving(true);const updates={name:form.name,jobTitle:form.jobTitle};if(form.newPassword){if(form.newPassword.length<8){setToast({message:'New password min 8 chars',type:'error'});return;}updates.password=form.newPassword;}await api.put(`/users/${user.id}`,updates);setToast({message:'Profile updated',type:'success'});}
-    catch(err){setToast({message:err.message,type:'error'});}finally{setSaving(false);}
-  };
-  return (
-    <div style={{padding:28}}>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <h2 style={{color:C.tx,fontSize:19,fontWeight:800,marginBottom:20}}>My Profile</h2>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-        <Card>
-          <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:20}}>
-            <Avatar name={user.name} size={56} />
-            <div><div style={{color:C.tx,fontWeight:800,fontSize:16}}>{user.name}</div><div style={{color:C.txs,fontSize:12}}>{user.email}</div><div style={{marginTop:5}}><Badge label={user.role.replace('_',' ')} color="blue" /></div></div>
-          </div>
-          <Input label="Full Name" value={form.name} onChange={v=>setForm(p=>({...p,name:v}))} placeholder="Your name" />
-          <Input label="Job Title" value={form.jobTitle} onChange={v=>setForm(p=>({...p,jobTitle:v}))} placeholder="e.g. Sales Manager" />
-          <Btn onClick={handleSave} disabled={saving}>{saving?'Saving...':'Update Profile'}</Btn>
-        </Card>
-        <Card>
-          <h3 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:14}}>Change Password</h3>
-          <Input label="New Password" value={form.newPassword} onChange={v=>setForm(p=>({...p,newPassword:v}))} type="password" placeholder="Min 8 characters" />
-          <div style={{background:C.warnS,borderRadius:8,padding:'9px 13px',fontSize:12,color:C.warn,marginBottom:14}}>⚠ Leave blank to keep your current password.</div>
-          <Btn onClick={handleSave} disabled={saving} variant="ghost">{saving?'Saving...':'Update Password'}</Btn>
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-// ── Header ────────────────────────────────────────────────────
-const Header = ({title,user,notifs,unread,onMarkRead,company}) => {
-  const [open,setOpen]=useState(false);
-  return (
-    <div style={{height:54,borderBottom:`1px solid ${C.bdr}`,display:'flex',alignItems:'center',padding:'0 24px',justifyContent:'space-between',background:C.bg,position:'sticky',top:0,zIndex:50,flexShrink:0}}>
-      <h1 style={{color:C.tx,fontSize:16,fontWeight:700,margin:0}}>{title}</h1>
-      <div style={{display:'flex',alignItems:'center',gap:10}}>
-        <LiveClock />
-        {company?.website&&<a href={company.website} target="_blank" rel="noopener noreferrer" style={{color:C.acc,fontSize:12,textDecoration:'none'}}>🌐 {company.name}</a>}
-        <div style={{position:'relative'}}>
-          <button onClick={()=>{setOpen(p=>!p);if(!open)onMarkRead();}} style={{padding:'5px 11px',background:open?C.accS:C.surf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tx,cursor:'pointer',fontSize:13,display:'flex',alignItems:'center',gap:5}}>
-            🔔{unread>0&&<span style={{background:C.err,color:'#fff',borderRadius:10,padding:'0 5px',fontSize:9,fontWeight:700}}>{unread}</span>}
-          </button>
-          {open&&<div style={{position:'absolute',right:0,top:'calc(100% + 7px)',background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:12,width:280,boxShadow:'0 16px 48px rgba(0,0,0,.4)',zIndex:200,overflow:'hidden'}}>
-            <div style={{padding:'10px 14px',borderBottom:`1px solid ${C.bdr}`,fontSize:12,fontWeight:700,color:C.tx}}>Notifications</div>
-            {notifs.length===0?<div style={{padding:16,textAlign:'center',color:C.txm,fontSize:12}}>No notifications</div>
-            :notifs.slice(0,8).map(n=>(
-              <div key={n._id} style={{padding:'9px 14px',borderBottom:`1px solid ${C.bdr}`,background:n.read?'transparent':C.accS}}>
-                <div style={{color:C.tx,fontSize:11,fontWeight:n.read?400:600}}>{n.title}</div>
-                <div style={{color:C.txm,fontSize:10,marginTop:2}}>{n.message}</div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: T.textPrimary }}>{m.value}</span>
               </div>
             ))}
-          </div>}
+          </div>
         </div>
-        <span style={{color:C.txs,fontSize:11}}>{new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>
       </div>
-    </div>
+    </PageShell>
   );
-};
+}
 
-// ── Main App ──────────────────────────────────────────────────
-const TITLES = {
-  dashboard:'Dashboard', employees:'Employees', attendance:'Attendance',
-  worklogs:'Work Logs', salary:'Salary', buyers:'Buyers', orders:'Orders',
-  analytics:'Analytics', company:'Company Settings', audit:'Audit Logs',
-  'my-dashboard':'My Dashboard', 'my-attendance':'My Attendance',
-  'my-salary':'My Salary', profile:'My Profile',
-  chat:'Messages', tools:'Tools Hub',
-};
+// ─── Employees Page ───────────────────────────────────────────────────────────
+function EmployeesPage({ addToast }) {
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", position: "", department: "", salary: "" });
+  const [saving, setSaving] = useState(false);
+  const API = "https://nexus-backend-production-771f.up.railway.app";
 
-export default function App() {
-  const [user,   setUser]   = useState(null);
-  const [loading,setLoading]= useState(true);
-  const [tab,    setTab]    = useState('dashboard');
-  const [collapsed,setCollapsed]= useState(false);
-  const [toast,  setToast]  = useState(null);
-  const [notifs, setNotifs] = useState([]);
-  const [unread, setUnread] = useState(0);
-  const [chatUnread, setChatUnread] = useState(0);
-  const [company,setCompany]= useState(null);
-  const [onlineUsers, setOnlineUsers] = useState([]);
-  const socketRef = useRef(null);
-  const isAdmin = ['admin','super_admin'].includes(user?.role);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/employees`);
+      const d = await r.json();
+      setEmployees(d?.employees || d || []);
+    } catch { addToast("Failed to load employees", "error"); }
+    setLoading(false);
+  }, []);
 
-  useEffect(()=>{
-    const token=localStorage.getItem('ems_token');
-    if (!token){setLoading(false);return;}
-    Promise.all([api.get('/auth/me'),api.get('/company')]).then(([u,c])=>{setUser(u.user);setCompany(c.data);setTab(isAdminRole(u.user.role)?'dashboard':'my-dashboard');}).catch(()=>localStorage.removeItem('ems_token')).finally(()=>setLoading(false));
-  },[]);
+  useEffect(() => { load(); }, [load]);
 
-  const isAdminRole=r=>['admin','super_admin'].includes(r);
-
-  useEffect(()=>{ 
-    if (!user) return;
-    const token=localStorage.getItem('ems_token');
-    const socket=io(API,{auth:{token},transports:['websocket','polling'],reconnection:true});
-    socketRef.current=socket;
-    socket.on('notification',data=>{
-      setNotifs(p=>[{_id:Date.now().toString(),title:data.title,message:data.message,read:false,createdAt:new Date().toISOString()},...p]);
-      setUnread(c=>c+1);
-    });
-    socket.on('message:new', msg => {
-      if (msg.sender?._id !== user.id) {
-        setNotifs(p=>[{_id:Date.now().toString(),title:`💬 New message from ${msg.sender?.name||'Someone'}`,message:msg.content||'Sent a file',read:false,createdAt:new Date().toISOString()},...p]);
-        setUnread(c=>c+1);
-        setChatUnread(c=>c+1);
-        if (Notification.permission==='granted') {
-          new Notification(`💬 ${msg.sender?.name||'Someone'}`,{body:msg.content||'Sent a file',icon:'/favicon.ico'});
-        }
-      }
-  
-    });
-    socket.on('online_users', users => setOnlineUsers(users));
-    api.get('/notifications').then(d=>{setNotifs(d.data||[]);setUnread(d.unread||0);}).catch(()=>{});
-    return()=>{socket.disconnect();};
-  },[user?.id]);
-
-  const handleLogin=(userData,token)=>{
-    setUser(userData);
-    setTab(isAdminRole(userData.role)?'dashboard':'my-dashboard');
-    api.get('/company').then(d=>setCompany(d.data)).catch(()=>{});
-    setToast({message:`Welcome, ${userData.name.split(' ')[0]}!`,type:'success'});
-    if(Notification.permission==='default') Notification.requestPermission();
-  };
-
-  const handleLogout=async()=>{
-    try{await api.post('/auth/logout');}catch{}
-    localStorage.removeItem('ems_token');setUser(null);setCompany(null);setNotifs([]);setUnread(0);
-    if(socketRef.current)socketRef.current.disconnect();
-    setToast({message:'Signed out',type:'info'});
-  };
-
-  const markAllRead=async()=>{try{await api.post('/notifications/mark-read');setNotifs(p=>p.map(n=>({...n,read:true})));setUnread(0);}catch{}};
-
-  if (loading) return (
-    <div style={{minHeight:'100vh',background:C.bg,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Segoe UI',sans-serif"}}>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <div style={{textAlign:'center'}}>
-        <div style={{width:48,height:48,borderRadius:13,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,fontWeight:900,color:'#fff',margin:'0 auto 16px',boxShadow:'0 0 32px rgba(99,102,241,.3)'}}>E</div>
-        <div style={{width:28,height:28,border:`3px solid ${C.bdr}`,borderTop:`3px solid ${C.acc}`,borderRadius:'50%',animation:'spin .8s linear infinite',margin:'0 auto'}} />
-        <div style={{color:C.txm,fontSize:12,marginTop:12}}>Loading...</div>
-      </div>
-    </div>
+  const filtered = employees.filter(e =>
+    [e.name, e.email, e.position, e.department].some(f => f?.toLowerCase().includes(search.toLowerCase()))
   );
 
-  if (!user) return (
-    <>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',sans-serif;background:${C.bg}}input,select,textarea,button{font-family:inherit}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <AuthPage onLogin={handleLogin} />
-    </>
-  );
-
-  const renderPage=()=>{
-    switch(tab){
-      case 'dashboard':      return <Dashboard user={user} setTab={setTab} />;
-      case 'my-dashboard':   return <EmployeeDashboard user={user} />;
-      case 'employees':      return <EmployeesPage user={user} />;
-      case 'attendance':
-      case 'my-attendance':  return <AttendancePage user={user} />;
-      case 'worklogs':       return <WorkLogsPage user={user} />;
-      case 'salary':
-      case 'my-salary':      return <SalaryPage user={user} />;
-      case 'buyers':         return <BuyersPage />;
-      case 'orders':         return <OrdersPage />;
-      case 'analytics':      return <AnalyticsPage user={user} />;
-      case 'company':        return <CompanyPage />;
-      case 'audit':          return <AuditPage />;
-      case 'profile':        return <ProfilePage user={user} setUser={setUser} />;
-      case 'chat':           return <ChatPage user={user} socket={socketRef.current} onlineUsers={onlineUsers} />;
-      case 'tools':          return <ToolsPage />;
-      default:               return <Dashboard user={user} setTab={setTab} />;
-    }
+  const handleSave = async () => {
+    if (!form.name || !form.email) return addToast("Name and email are required", "error");
+    setSaving(true);
+    try {
+      const r = await fetch(`${API}/api/employees`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!r.ok) throw new Error();
+      addToast("Employee added", "success");
+      setModal(false);
+      setForm({ name: "", email: "", position: "", department: "", salary: "" });
+      load();
+    } catch { addToast("Failed to save employee", "error"); }
+    setSaving(false);
   };
 
-  const sw=collapsed?68:220;
+  const handleDelete = async (id) => {
+    if (!confirm("Remove this employee?")) return;
+    try {
+      await fetch(`${API}/api/employees/${id}`, { method: "DELETE" });
+      addToast("Employee removed", "success");
+      load();
+    } catch { addToast("Failed to delete", "error"); }
+  };
+
   return (
-    <>
-      <style>{`*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',sans-serif;background:${C.bg};color:${C.tx};overflow:hidden}input,select,textarea,button{font-family:inherit}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:${C.bdr};border-radius:3px}@keyframes spin{to{transform:rotate(360deg)}}select option{background:${C.surf}}`}</style>
-      {toast&&<Toast {...toast} onClose={()=>setToast(null)} />}
-      <Sidebar tab={tab} setTab={setTab} user={user} onLogout={handleLogout} company={company} collapsed={collapsed} setCollapsed={setCollapsed} />
-      <div style={{marginLeft:sw,flex:1,display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden',transition:'margin-left .2s ease'}}>
-        <Header title={TITLES[tab]||tab} user={user} notifs={notifs} unread={unread} onMarkRead={markAllRead} company={company} />
-        <div style={{flex:1,overflowY:'auto',overflowX:'hidden'}}>{renderPage()}</div>
+    <PageShell title="Employees" sub={`${employees.length} total members`}
+      actions={
+        <>
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employees…" icon={Search} style={{ width: 220 }} />
+          <Btn onClick={() => setModal(true)} icon={Plus}>Add Employee</Btn>
+        </>
+      }
+    >
+      <Table
+        loading={loading}
+        columns={[
+          { key: "name", label: "Name", render: (v, row) => (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: 8,
+                background: T.accentGlow,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, fontWeight: 700, color: T.accent,
+              }}>{v?.[0]?.toUpperCase()}</div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{v}</div>
+                <div style={{ fontSize: 11, color: T.textSecondary }}>{row.email}</div>
+              </div>
+            </div>
+          )},
+          { key: "position", label: "Position" },
+          { key: "department", label: "Department" },
+          { key: "salary", label: "Salary", render: v => v ? `₹${Number(v).toLocaleString("en-IN")}` : "—" },
+          { key: "status", label: "Status", render: v => {
+            const active = !v || v === "active";
+            return <Badge label={active ? "Active" : "Inactive"} color={active ? T.success : T.textSecondary} />;
+          }},
+          { key: "_id", label: "", render: (v) => (
+            <Btn variant="danger" size="sm" onClick={() => handleDelete(v)}>Remove</Btn>
+          )},
+        ]}
+        rows={filtered}
+        emptyText={search ? "No matching employees" : "No employees yet. Add one to get started."}
+      />
+
+      <Modal open={modal} onClose={() => setModal(false)} title="Add Employee">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {[
+            { key: "name", label: "Full Name", placeholder: "Jane Smith" },
+            { key: "email", label: "Email", placeholder: "jane@company.com", type: "email" },
+            { key: "position", label: "Position", placeholder: "Software Engineer" },
+            { key: "department", label: "Department", placeholder: "Engineering" },
+            { key: "salary", label: "Monthly Salary (₹)", placeholder: "50000", type: "number" },
+          ].map(f => (
+            <div key={f.key}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.textSecondary, marginBottom: 6 }}>{f.label}</label>
+              <Input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} type={f.type} />
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+            <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
+            <Btn onClick={handleSave} disabled={saving} icon={saving ? undefined : undefined}>
+              {saving ? "Saving…" : "Add Employee"}
+            </Btn>
+          </div>
+        </div>
+      </Modal>
+    </PageShell>
+  );
+}
+
+// ─── Attendance Page ──────────────────────────────────────────────────────────
+function AttendancePage({ addToast }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [dateFilter, setDateFilter] = useState("");
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`${API}/api/attendance`);
+        const d = await r.json();
+        setRecords(d?.attendance || d || []);
+      } catch { addToast("Failed to load attendance", "error"); }
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = records.filter(r => {
+    const matchSearch = !search || r.employeeName?.toLowerCase().includes(search.toLowerCase());
+    const matchDate = !dateFilter || r.date?.startsWith(dateFilter);
+    return matchSearch && matchDate;
+  });
+
+  const markAttendance = async (employeeId, status) => {
+    try {
+      await fetch(`${API}/api/attendance`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId, status, date: new Date().toISOString().split("T")[0] }),
+      });
+      addToast(`Marked ${status}`, "success");
+    } catch { addToast("Failed to mark attendance", "error"); }
+  };
+
+  return (
+    <PageShell title="Attendance" sub="Daily attendance tracking"
+      actions={
+        <>
+          <Input value={dateFilter} onChange={e => setDateFilter(e.target.value)} type="date" style={{ width: 160 }} />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name…" icon={Search} style={{ width: 200 }} />
+        </>
+      }
+    >
+      <Table
+        loading={loading}
+        columns={[
+          { key: "employeeName", label: "Employee" },
+          { key: "date", label: "Date", render: v => v ? new Date(v).toLocaleDateString("en-IN") : "—" },
+          { key: "checkIn", label: "Check In", render: v => v || "—" },
+          { key: "checkOut", label: "Check Out", render: v => v || "—" },
+          { key: "status", label: "Status", render: v => {
+            const map = { present: T.success, absent: T.danger, late: T.warning, halfday: T.purple };
+            return <Badge label={v || "Unknown"} color={map[v?.toLowerCase()] || T.textSecondary} />;
+          }},
+          { key: "hoursWorked", label: "Hours", render: v => v ? `${v}h` : "—" },
+        ]}
+        rows={filtered}
+        emptyText="No attendance records found"
+      />
+    </PageShell>
+  );
+}
+
+// ─── Work Logs Page ───────────────────────────────────────────────────────────
+function WorklogsPage({ addToast }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ employeeId: "", task: "", hours: "", date: "", notes: "" });
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/worklogs`);
+      const d = await r.json();
+      setLogs(d?.worklogs || d || []);
+    } catch { addToast("Failed to load work logs", "error"); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = logs.filter(l =>
+    !search || [l.employeeName, l.task].some(f => f?.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const handleSave = async () => {
+    try {
+      await fetch(`${API}/api/worklogs`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      addToast("Work log saved", "success");
+      setModal(false);
+      setForm({ employeeId: "", task: "", hours: "", date: "", notes: "" });
+      load();
+    } catch { addToast("Failed to save work log", "error"); }
+  };
+
+  return (
+    <PageShell title="Work Logs" sub="Employee task records"
+      actions={
+        <>
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search logs…" icon={Search} style={{ width: 220 }} />
+          <Btn onClick={() => setModal(true)} icon={Plus}>Add Log</Btn>
+        </>
+      }
+    >
+      <Table
+        loading={loading}
+        columns={[
+          { key: "employeeName", label: "Employee" },
+          { key: "task", label: "Task" },
+          { key: "hours", label: "Hours", render: v => v ? `${v}h` : "—" },
+          { key: "date", label: "Date", render: v => v ? new Date(v).toLocaleDateString("en-IN") : "—" },
+          { key: "notes", label: "Notes", render: v => <span style={{ color: T.textSecondary }}>{v || "—"}</span> },
+        ]}
+        rows={filtered}
+        emptyText="No work logs found"
+      />
+
+      <Modal open={modal} onClose={() => setModal(false)} title="Add Work Log">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {[
+            { key: "task", label: "Task Description", placeholder: "Completed feature X" },
+            { key: "hours", label: "Hours Worked", placeholder: "8", type: "number" },
+            { key: "date", label: "Date", type: "date" },
+            { key: "notes", label: "Notes", placeholder: "Additional details…" },
+          ].map(f => (
+            <div key={f.key}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.textSecondary, marginBottom: 6 }}>{f.label}</label>
+              <Input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} type={f.type} />
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+            <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
+            <Btn onClick={handleSave}>Save Log</Btn>
+          </div>
+        </div>
+      </Modal>
+    </PageShell>
+  );
+}
+
+// ─── Salary / Payroll Page ────────────────────────────────────────────────────
+function SalaryPage({ addToast }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`${API}/api/salary`);
+        const d = await r.json();
+        setRecords(d?.salaries || d || []);
+      } catch { addToast("Failed to load payroll", "error"); }
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = records.filter(r => !search || r.employeeName?.toLowerCase().includes(search.toLowerCase()));
+  const total = filtered.reduce((s, r) => s + (r.totalSalary || r.amount || 0), 0);
+
+  return (
+    <PageShell title="Payroll" sub={`Total disbursed: ₹${total.toLocaleString("en-IN")}`}
+      actions={<Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee…" icon={Search} style={{ width: 220 }} />}
+    >
+      <Table
+        loading={loading}
+        columns={[
+          { key: "employeeName", label: "Employee" },
+          { key: "month", label: "Month" },
+          { key: "basicSalary", label: "Basic", render: v => v ? `₹${Number(v).toLocaleString("en-IN")}` : "—" },
+          { key: "deductions", label: "Deductions", render: v => v ? <span style={{ color: T.danger }}>-₹{Number(v).toLocaleString("en-IN")}</span> : "—" },
+          { key: "bonuses", label: "Bonuses", render: v => v ? <span style={{ color: T.success }}>+₹{Number(v).toLocaleString("en-IN")}</span> : "—" },
+          { key: "totalSalary", label: "Net Pay", render: v => <span style={{ fontWeight: 700 }}>{v ? `₹${Number(v).toLocaleString("en-IN")}` : "—"}</span> },
+          { key: "status", label: "Status", render: v => {
+            const map = { paid: T.success, pending: T.warning, failed: T.danger };
+            return <Badge label={v || "Unknown"} color={map[v?.toLowerCase()] || T.textSecondary} />;
+          }},
+        ]}
+        rows={filtered}
+        emptyText="No payroll records"
+      />
+    </PageShell>
+  );
+}
+
+// ─── Buyers Page ──────────────────────────────────────────────────────────────
+function BuyersPage({ addToast }) {
+  const [buyers, setBuyers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", address: "" });
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/buyers`);
+      const d = await r.json();
+      setBuyers(d?.buyers || d || []);
+    } catch { addToast("Failed to load buyers", "error"); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = buyers.filter(b => !search || [b.name, b.email, b.company].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+
+  const handleSave = async () => {
+    if (!form.name) return addToast("Name is required", "error");
+    try {
+      await fetch(`${API}/api/buyers`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      addToast("Buyer added", "success");
+      setModal(false);
+      setForm({ name: "", email: "", phone: "", company: "", address: "" });
+      load();
+    } catch { addToast("Failed to save buyer", "error"); }
+  };
+
+  return (
+    <PageShell title="Buyers" sub={`${buyers.length} registered buyers`}
+      actions={
+        <>
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search buyers…" icon={Search} style={{ width: 220 }} />
+          <Btn onClick={() => setModal(true)} icon={Plus}>Add Buyer</Btn>
+        </>
+      }
+    >
+      <Table
+        loading={loading}
+        columns={[
+          { key: "name", label: "Name", render: (v, row) => (
+            <div>
+              <div style={{ fontWeight: 600 }}>{v}</div>
+              <div style={{ fontSize: 11, color: T.textSecondary }}>{row.company}</div>
+            </div>
+          )},
+          { key: "email", label: "Email" },
+          { key: "phone", label: "Phone" },
+          { key: "address", label: "Address", render: v => <span style={{ color: T.textSecondary }}>{v || "—"}</span> },
+          { key: "totalOrders", label: "Orders", render: v => v || 0 },
+          { key: "totalSpent", label: "Total Spent", render: v => v ? `₹${Number(v).toLocaleString("en-IN")}` : "—" },
+        ]}
+        rows={filtered}
+        emptyText="No buyers yet"
+      />
+
+      <Modal open={modal} onClose={() => setModal(false)} title="Add Buyer">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {[
+            { key: "name", label: "Full Name", placeholder: "Rajan Mehta" },
+            { key: "email", label: "Email", placeholder: "rajan@corp.com", type: "email" },
+            { key: "phone", label: "Phone", placeholder: "+91 98765 43210" },
+            { key: "company", label: "Company", placeholder: "Mehta Industries" },
+            { key: "address", label: "Address", placeholder: "Mumbai, Maharashtra" },
+          ].map(f => (
+            <div key={f.key}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.textSecondary, marginBottom: 6 }}>{f.label}</label>
+              <Input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} type={f.type} />
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+            <Btn variant="ghost" onClick={() => setModal(false)}>Cancel</Btn>
+            <Btn onClick={handleSave}>Add Buyer</Btn>
+          </div>
+        </div>
+      </Modal>
+    </PageShell>
+  );
+}
+
+// ─── Orders Page ──────────────────────────────────────────────────────────────
+function OrdersPage({ addToast }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`${API}/api/orders`);
+        const d = await r.json();
+        setOrders(d?.orders || d || []);
+      } catch { addToast("Failed to load orders", "error"); }
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = orders.filter(o => {
+    const matchSearch = !search || [o.buyerName, o.orderId, o.productName].some(f => f?.toLowerCase().includes(search.toLowerCase()));
+    const matchStatus = statusFilter === "all" || o.status?.toLowerCase() === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  return (
+    <PageShell title="Orders" sub={`${orders.length} total orders`}
+      actions={
+        <>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{
+            background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8,
+            color: T.textPrimary, fontSize: 13, padding: "8px 12px",
+          }}>
+            {["all", "pending", "processing", "completed", "cancelled"].map(s => (
+              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            ))}
+          </select>
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search orders…" icon={Search} style={{ width: 220 }} />
+        </>
+      }
+    >
+      <Table
+        loading={loading}
+        columns={[
+          { key: "orderId", label: "Order ID", render: v => <span style={{ fontFamily: "monospace", fontSize: 12, color: T.textSecondary }}>#{v || "—"}</span> },
+          { key: "buyerName", label: "Buyer" },
+          { key: "productName", label: "Product" },
+          { key: "quantity", label: "Qty" },
+          { key: "totalAmount", label: "Amount", render: v => <span style={{ fontWeight: 600 }}>{v ? `₹${Number(v).toLocaleString("en-IN")}` : "—"}</span> },
+          { key: "orderDate", label: "Date", render: v => v ? new Date(v).toLocaleDateString("en-IN") : "—" },
+          { key: "status", label: "Status", render: v => {
+            const map = { pending: T.warning, processing: T.cyan, completed: T.success, cancelled: T.danger };
+            return <Badge label={v || "Unknown"} color={map[v?.toLowerCase()] || T.textSecondary} />;
+          }},
+        ]}
+        rows={filtered}
+        emptyText="No orders found"
+      />
+    </PageShell>
+  );
+}
+
+// ─── Analytics Page ───────────────────────────────────────────────────────────
+function AnalyticsPage({ addToast }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const [empR, ordR, salR] = await Promise.allSettled([
+          fetch(`${API}/api/employees`).then(r => r.json()),
+          fetch(`${API}/api/orders`).then(r => r.json()),
+          fetch(`${API}/api/salary`).then(r => r.json()),
+        ]);
+        const emp = empR.status === "fulfilled" ? (empR.value?.employees || empR.value || []) : [];
+        const ord = ordR.status === "fulfilled" ? (ordR.value?.orders || ordR.value || []) : [];
+        const sal = salR.status === "fulfilled" ? (salR.value?.salaries || salR.value || []) : [];
+        setData({
+          totalEmp: emp.length,
+          activeEmp: emp.filter(e => e.status === "active" || e.isActive).length,
+          totalOrders: ord.length,
+          completedOrders: ord.filter(o => o.status === "completed").length,
+          totalRevenue: ord.reduce((s, o) => s + (o.totalAmount || 0), 0),
+          totalPayroll: sal.reduce((s, s2) => s + (s2.totalSalary || s2.amount || 0), 0),
+          deptBreakdown: emp.reduce((acc, e) => {
+            const d = e.department || "Other";
+            acc[d] = (acc[d] || 0) + 1;
+            return acc;
+          }, {}),
+        });
+      } catch { addToast("Failed to load analytics", "error"); }
+      setLoading(false);
+    })();
+  }, []);
+
+  const fmt = n => `₹${(n || 0).toLocaleString("en-IN")}`;
+  const pct = (a, b) => b ? `${((a / b) * 100).toFixed(1)}%` : "0%";
+
+  return (
+    <PageShell title="Analytics" sub="Performance insights across your organization">
+      {loading ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+          {Array(8).fill(0).map((_, i) => <div key={i} className="skeleton" style={{ height: 110, borderRadius: 12 }} />)}
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 28 }}>
+            <StatCard label="Total Employees" value={data.totalEmp} color={T.accent} icon={Users} />
+            <StatCard label="Active Rate" value={pct(data.activeEmp, data.totalEmp)} color={T.success} icon={Activity} sub="of workforce" />
+            <StatCard label="Total Revenue" value={fmt(data.totalRevenue)} color={T.purple} icon={TrendingUp} />
+            <StatCard label="Order Completion" value={pct(data.completedOrders, data.totalOrders)} color={T.cyan} icon={CheckCircle2} />
+            <StatCard label="Total Payroll" value={fmt(data.totalPayroll)} color={T.warning} icon={Wallet} />
+            <StatCard label="Total Orders" value={data.totalOrders} color={T.success} icon={Package} />
+          </div>
+
+          <SectionHeading title="Department Breakdown" sub="Employee distribution by department" />
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 24 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {Object.entries(data.deptBreakdown).map(([dept, count]) => {
+                const pctVal = (count / data.totalEmp) * 100;
+                return (
+                  <div key={dept}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, color: T.textPrimary }}>{dept}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: T.textSecondary }}>{count} ({pctVal.toFixed(1)}%)</span>
+                    </div>
+                    <div style={{ height: 5, background: T.border, borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{
+                        height: "100%", width: `${pctVal}%`, borderRadius: 99,
+                        background: `linear-gradient(90deg, ${T.accent}, ${T.purple})`,
+                        transition: "width 0.6s ease",
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+              {Object.keys(data.deptBreakdown).length === 0 && (
+                <p style={{ color: T.textSecondary, fontSize: 13 }}>No department data available</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+// ─── Company Settings ─────────────────────────────────────────────────────────
+function CompanyPage({ addToast }) {
+  const [settings, setSettings] = useState({ companyName: "", email: "", phone: "", address: "", website: "", gst: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`${API}/api/company`);
+        const d = await r.json();
+        setSettings(d?.company || d || settings);
+      } catch {}
+      setLoading(false);
+    })();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch(`${API}/api/company`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+      addToast("Company settings saved", "success");
+    } catch { addToast("Failed to save settings", "error"); }
+    setSaving(false);
+  };
+
+  return (
+    <PageShell title="Company Settings" sub="Manage your organization details">
+      {loading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {Array(6).fill(0).map((_, i) => <div key={i} className="skeleton" style={{ height: 42, borderRadius: 8 }} />)}
+        </div>
+      ) : (
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 28, maxWidth: 600 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {[
+              { key: "companyName", label: "Company Name" },
+              { key: "email", label: "Email" },
+              { key: "phone", label: "Phone" },
+              { key: "website", label: "Website" },
+              { key: "gst", label: "GST Number" },
+            ].map(f => (
+              <div key={f.key} style={{ gridColumn: f.key === "address" ? "1/-1" : undefined }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.textSecondary, marginBottom: 6 }}>{f.label}</label>
+                <Input value={settings[f.key] || ""} onChange={e => setSettings(p => ({ ...p, [f.key]: e.target.value }))} />
+              </div>
+            ))}
+            <div style={{ gridColumn: "1/-1" }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.textSecondary, marginBottom: 6 }}>Address</label>
+              <Input value={settings.address || ""} onChange={e => setSettings(p => ({ ...p, address: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ marginTop: 24, display: "flex", justifyContent: "flex-end" }}>
+            <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Settings"}</Btn>
+          </div>
+        </div>
+      )}
+    </PageShell>
+  );
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+function AuditPage({ addToast }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`${API}/api/audit`);
+        const d = await r.json();
+        setLogs(d?.logs || d || []);
+      } catch {}
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = logs.filter(l => !search || [l.action, l.user, l.module].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+
+  return (
+    <PageShell title="Audit Log" sub="System activity and change history"
+      actions={<Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search logs…" icon={Search} style={{ width: 220 }} />}
+    >
+      <Table
+        loading={loading}
+        columns={[
+          { key: "timestamp", label: "Time", render: v => v ? new Date(v).toLocaleString("en-IN") : "—" },
+          { key: "user", label: "User" },
+          { key: "module", label: "Module" },
+          { key: "action", label: "Action", render: v => <Badge label={v || "—"} color={T.accent} /> },
+          { key: "details", label: "Details", render: v => <span style={{ color: T.textSecondary, fontSize: 12 }}>{v || "—"}</span> },
+          { key: "ipAddress", label: "IP", render: v => <span style={{ fontFamily: "monospace", fontSize: 11, color: T.textMuted }}>{v || "—"}</span> },
+        ]}
+        rows={filtered}
+        emptyText="No audit records found"
+      />
+    </PageShell>
+  );
+}
+
+// ─── Profile Page ─────────────────────────────────────────────────────────────
+function ProfilePage({ addToast, user }) {
+  const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", phone: "", bio: "", currentPassword: "", newPassword: "" });
+  const [saving, setSaving] = useState(false);
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await fetch(`${API}/api/auth/profile`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      addToast("Profile updated", "success");
+    } catch { addToast("Failed to update profile", "error"); }
+    setSaving(false);
+  };
+
+  return (
+    <PageShell title="Profile" sub="Manage your personal account">
+      <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 20, maxWidth: 800 }}>
+        <div style={{
+          background: T.surface, border: `1px solid ${T.border}`,
+          borderRadius: 12, padding: 24,
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+        }}>
+          <div style={{
+            width: 80, height: 80, borderRadius: 20,
+            background: T.accentGlow,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 28, fontWeight: 800, color: T.accent,
+            border: `2px solid ${T.accent}33`,
+          }}>
+            {(form.name?.[0] || "U").toUpperCase()}
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{form.name || "User"}</div>
+            <div style={{ fontSize: 12, color: T.textSecondary, marginTop: 4 }}>{form.email}</div>
+          </div>
+          <Badge label="Administrator" color={T.purple} />
+        </div>
+
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 24 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: T.textSecondary, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 20 }}>Account Information</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {[
+              { key: "name", label: "Full Name" },
+              { key: "email", label: "Email", type: "email" },
+              { key: "phone", label: "Phone" },
+              { key: "bio", label: "Bio" },
+            ].map(f => (
+              <div key={f.key}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.textSecondary, marginBottom: 6 }}>{f.label}</label>
+                <Input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} type={f.type} />
+              </div>
+            ))}
+            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 20 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: T.textSecondary, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 16 }}>Change Password</p>
+              {[
+                { key: "currentPassword", label: "Current Password" },
+                { key: "newPassword", label: "New Password" },
+              ].map(f => (
+                <div key={f.key} style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.textSecondary, marginBottom: 6 }}>{f.label}</label>
+                  <Input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} type="password" />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <Btn onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Btn>
+            </div>
+          </div>
+        </div>
       </div>
-    </>
+    </PageShell>
+  );
+}
+
+// ─── Chat Page ────────────────────────────────────────────────────────────────
+function ChatPage({ addToast }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef(null);
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`${API}/api/chat/messages`);
+        const d = await r.json();
+        setMessages(d?.messages || d || []);
+      } catch {}
+      setLoading(false);
+    })();
+  }, []);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const send = async () => {
+    if (!input.trim()) return;
+    const msg = { message: input.trim(), timestamp: new Date(), sender: "You" };
+    setMessages(p => [...p, msg]);
+    setInput("");
+    setSending(true);
+    try {
+      await fetch(`${API}/api/chat/messages`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(msg),
+      });
+    } catch {}
+    setSending(false);
+  };
+
+  return (
+    <PageShell title="Messages" sub="Internal team communication">
+      <div style={{
+        background: T.surface, border: `1px solid ${T.border}`,
+        borderRadius: 12, display: "flex", flexDirection: "column",
+        height: "calc(100vh - 200px)", overflow: "hidden",
+      }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+          {loading ? <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><Spinner /></div>
+            : messages.length === 0 ? <div style={{ textAlign: "center", color: T.textSecondary, padding: 40 }}>No messages yet. Start the conversation.</div>
+            : messages.map((m, i) => {
+              const isMe = m.sender === "You" || m.isMe;
+              return (
+                <div key={i} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
+                  <div style={{
+                    maxWidth: "70%", padding: "10px 14px", borderRadius: 12,
+                    background: isMe ? T.accent : T.surfaceAlt,
+                    color: T.textPrimary, fontSize: 13, lineHeight: 1.5,
+                    borderBottomRightRadius: isMe ? 3 : 12,
+                    borderBottomLeftRadius: isMe ? 12 : 3,
+                  }}>
+                    {!isMe && <div style={{ fontSize: 11, fontWeight: 600, color: T.textSecondary, marginBottom: 4 }}>{m.sender}</div>}
+                    {m.message || m.text}
+                    <div style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,.5)" : T.textMuted, marginTop: 4 }}>
+                      {m.timestamp ? new Date(m.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : ""}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          }
+          <div ref={bottomRef} />
+        </div>
+        <div style={{ padding: "14px 20px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 10 }}>
+          <Input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Type a message…"
+            style={{ flex: 1 }}
+          />
+          <Btn onClick={send} disabled={sending || !input.trim()}>{sending ? "…" : "Send"}</Btn>
+        </div>
+      </div>
+    </PageShell>
+  );
+}
+
+// ─── Tools Page ───────────────────────────────────────────────────────────────
+function ToolsPage({ addToast }) {
+  const tools = [
+    { icon: RefreshCw, label: "Sync All Data", desc: "Force-refresh all cached records from the database", color: T.accent, action: () => addToast("Data sync initiated", "info") },
+    { icon: FileText, label: "Export Reports", desc: "Download payroll and attendance reports as CSV", color: T.success, action: () => addToast("Export started", "info") },
+    { icon: Shield, label: "Clear Audit Log", desc: "Archive and clear old audit trail entries", color: T.warning, action: () => addToast("Audit log cleared", "success") },
+    { icon: Activity, label: "Health Check", desc: "Verify API connectivity and database status", color: T.cyan, action: () => addToast("All systems operational", "success") },
+    { icon: Hash, label: "Recalculate Payroll", desc: "Recompute all pending salary calculations", color: T.purple, action: () => addToast("Payroll recalculation queued", "info") },
+    { icon: Users, label: "Bulk Employee Import", desc: "Import employees from CSV file", color: T.accent, action: () => addToast("Feature coming soon", "info") },
+  ];
+
+  return (
+    <PageShell title="Tools" sub="Administrative utilities and system operations">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+        {tools.map(t => (
+          <div key={t.label} onClick={t.action} style={{
+            background: T.surface, border: `1px solid ${T.border}`,
+            borderRadius: 12, padding: "20px 22px",
+            cursor: "pointer", transition: "all .2s",
+            display: "flex", gap: 16, alignItems: "flex-start",
+          }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = t.color + "55";
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.boxShadow = `0 8px 24px rgba(0,0,0,.3)`;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = T.border;
+              e.currentTarget.style.transform = "";
+              e.currentTarget.style.boxShadow = "";
+            }}
+          >
+            <div style={{
+              width: 40, height: 40, borderRadius: 10,
+              background: t.color + "18",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <t.icon size={18} color={t.color} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 5 }}>{t.label}</div>
+              <div style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.5 }}>{t.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </PageShell>
+  );
+}
+
+// ─── Auth / Login Page ────────────────────────────────────────────────────────
+function LoginPage({ onLogin }) {
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const API = "https://nexus-backend-production-771f.up.railway.app";
+
+  const handleLogin = async () => {
+    if (!form.email || !form.password) return setError("Please fill in all fields");
+    setLoading(true);
+    setError("");
+    try {
+      const r = await fetch(`${API}/api/auth/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || "Invalid credentials");
+      localStorage.setItem("ems_token", d.token || "");
+      localStorage.setItem("ems_user", JSON.stringify(d.user || { name: "Admin", email: form.email }));
+      onLogin(d.user || { name: "Admin", email: form.email });
+    } catch (err) {
+      setError(err.message || "Login failed");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: T.bg, padding: 20,
+      backgroundImage: `radial-gradient(ellipse at 30% 20%, ${T.accentGlow} 0%, transparent 60%), radial-gradient(ellipse at 70% 80%, rgba(139,92,246,0.08) 0%, transparent 60%)`,
+    }}>
+      <div className="animate-in" style={{ width: "100%", maxWidth: 400 }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 14,
+            background: `linear-gradient(135deg, ${T.accent}, ${T.purple})`,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 16, boxShadow: `0 8px 24px ${T.accentGlow}`,
+          }}>
+            <Building2 size={24} color="#fff" />
+          </div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.03em", marginBottom: 8 }}>AtoZ EMS</h1>
+          <p style={{ fontSize: 13, color: T.textSecondary }}>Sign in to your workspace</p>
+        </div>
+
+        <div style={{
+          background: T.surface, border: `1px solid ${T.border}`,
+          borderRadius: 14, padding: 28,
+          boxShadow: "0 24px 64px rgba(0,0,0,.5)",
+        }}>
+          {error && (
+            <div style={{
+              background: T.dangerBg, border: `1px solid ${T.danger}33`,
+              borderRadius: 8, padding: "10px 14px", marginBottom: 20,
+              fontSize: 13, color: T.danger, display: "flex", alignItems: "center", gap: 8,
+            }}>
+              <AlertCircle size={14} /> {error}
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.textSecondary, marginBottom: 8 }}>Email address</label>
+              <Input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="admin@company.com" type="email" />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: T.textSecondary, marginBottom: 8 }}>Password</label>
+              <Input value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="••••••••" type="password" />
+            </div>
+            <button
+              onClick={handleLogin}
+              disabled={loading}
+              style={{
+                width: "100%", padding: "11px", borderRadius: 9, marginTop: 4,
+                background: `linear-gradient(135deg, ${T.accent}, ${T.accentSoft})`,
+                color: "#fff", fontSize: 14, fontWeight: 700,
+                border: "none", cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.7 : 1,
+                transition: "all .2s",
+                boxShadow: `0 4px 12px ${T.accentGlow}`,
+              }}
+              onMouseEnter={e => { if (!loading) e.currentTarget.style.filter = "brightness(1.1)"; }}
+              onMouseLeave={e => { e.currentTarget.style.filter = ""; }}
+            >
+              {loading ? "Signing in…" : "Sign In"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+function Sidebar({ active, setActive, collapsed, setCollapsed, onLogout, user }) {
+  const W = collapsed ? 64 : 232;
+
+  return (
+    <div style={{
+      width: W, minWidth: W, height: "100vh",
+      background: T.surface,
+      borderRight: `1px solid ${T.border}`,
+      display: "flex", flexDirection: "column",
+      transition: "width .2s cubic-bezier(.4,0,.2,1), min-width .2s",
+      overflow: "hidden",
+      position: "relative",
+      zIndex: 10,
+    }}>
+      {/* Logo */}
+      <div style={{
+        padding: "18px 16px", display: "flex", alignItems: "center", gap: 10,
+        borderBottom: `1px solid ${T.border}`, flexShrink: 0,
+      }}>
+        <div style={{
+          width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+          background: `linear-gradient(135deg, ${T.accent}, ${T.purple})`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: `0 4px 12px ${T.accentGlow}`,
+        }}>
+          <Building2 size={16} color="#fff" />
+        </div>
+        {!collapsed && (
+          <div style={{ overflow: "hidden" }}>
+            <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: "-.02em", whiteSpace: "nowrap" }}>AtoZ EMS</div>
+            <div style={{ fontSize: 10, color: T.textMuted, whiteSpace: "nowrap" }}>Employee Management</div>
+          </div>
+        )}
+        <button
+          onClick={() => setCollapsed(p => !p)}
+          style={{
+            marginLeft: "auto", width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: T.textMuted, transition: "background .15s, color .15s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = T.border; e.currentTarget.style.color = T.textPrimary; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMuted; }}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <Menu size={14} />}
+        </button>
+      </div>
+
+      {/* Nav */}
+      <nav style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "12px 8px" }}>
+        {NAV_SECTIONS.map(sec => (
+          <div key={sec.label} style={{ marginBottom: 20 }}>
+            {!collapsed && (
+              <p style={{
+                fontSize: 10, fontWeight: 700, color: T.textMuted,
+                letterSpacing: ".1em", textTransform: "uppercase",
+                padding: "0 8px", marginBottom: 6,
+              }}>{sec.label}</p>
+            )}
+            {sec.items.map(item => {
+              const isActive = active === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActive(item.id)}
+                  title={collapsed ? item.label : undefined}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 10,
+                    padding: "8px 10px", borderRadius: 8, marginBottom: 2,
+                    background: isActive ? T.accentGlow : "transparent",
+                    color: isActive ? T.accent : T.textSecondary,
+                    fontWeight: isActive ? 600 : 400,
+                    fontSize: 13,
+                    transition: "all .15s",
+                    border: "none", cursor: "pointer",
+                    position: "relative",
+                    whiteSpace: "nowrap",
+                  }}
+                  onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = T.surfaceAlt; e.currentTarget.style.color = T.textPrimary; } }}
+                  onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textSecondary; } }}
+                >
+                  <item.icon size={16} style={{ flexShrink: 0 }} />
+                  {!collapsed && <span>{item.label}</span>}
+                  {!collapsed && item.badge && (
+                    <span style={{
+                      marginLeft: "auto", background: T.accent,
+                      color: "#fff", fontSize: 10, fontWeight: 700,
+                      borderRadius: 10, padding: "1px 6px", minWidth: 18, textAlign: "center",
+                    }}>{item.badge}</span>
+                  )}
+                  {collapsed && item.badge && (
+                    <span style={{
+                      position: "absolute", top: 6, right: 6,
+                      width: 7, height: 7, borderRadius: "50%",
+                      background: T.accent,
+                    }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </nav>
+
+      {/* User footer */}
+      <div style={{
+        padding: "12px 8px", borderTop: `1px solid ${T.border}`, flexShrink: 0,
+      }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "8px 10px", borderRadius: 8,
+          overflow: "hidden",
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+            background: T.accentGlow,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 12, fontWeight: 700, color: T.accent,
+          }}>
+            {(user?.name?.[0] || "A").toUpperCase()}
+          </div>
+          {!collapsed && (
+            <>
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user?.name || "Admin"}</div>
+                <div style={{ fontSize: 10, color: T.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user?.email || ""}</div>
+              </div>
+              <button onClick={onLogout} title="Sign out" style={{
+                width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: T.textMuted, transition: "background .15s, color .15s",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = T.dangerBg; e.currentTarget.style.color = T.danger; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = T.textMuted; }}
+              >
+                <LogOut size={13} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Top bar ──────────────────────────────────────────────────────────────────
+function TopBar({ activePage, clock }) {
+  const allItems = NAV_SECTIONS.flatMap(s => s.items);
+  const current = allItems.find(i => i.id === activePage);
+  const Icon = current?.icon;
+
+  return (
+    <div style={{
+      height: 56, borderBottom: `1px solid ${T.border}`,
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0 24px", background: T.surface, flexShrink: 0,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {Icon && <Icon size={15} color={T.textSecondary} />}
+        <span style={{ fontSize: 14, fontWeight: 600, color: T.textPrimary }}>{current?.label || "Dashboard"}</span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: T.bg, border: `1px solid ${T.border}`,
+          borderRadius: 8, padding: "5px 12px",
+          fontSize: 12, color: T.textSecondary,
+          fontVariantNumeric: "tabular-nums", fontWeight: 500,
+        }}>
+          <Clock size={12} color={T.textMuted} />
+          {clock}
+        </div>
+
+        <div style={{ position: "relative" }}>
+          <button style={{
+            width: 34, height: 34, borderRadius: 8,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: T.textSecondary, background: T.bg, border: `1px solid ${T.border}`,
+            transition: "border-color .15s, color .15s",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderFoc; e.currentTarget.style.color = T.accent; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.textSecondary; }}
+          >
+            <Bell size={14} />
+          </button>
+          <span style={{
+            position: "absolute", top: 7, right: 7,
+            width: 7, height: 7, borderRadius: "50%",
+            background: T.danger,
+            border: `1.5px solid ${T.surface}`,
+            animation: "blink 2s infinite",
+          }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+export default function App() {
+  injectGlobalStyles();
+
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("ems_user")); } catch { return null; }
+  });
+  const [activePage, setActivePage] = useState("dashboard");
+  const [collapsed, setCollapsed] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [clock, setClock] = useState("");
+
+  // Live clock
+  useEffect(() => {
+    const tick = () => setClock(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const addToast = useCallback((message, type = "info") => {
+    const id = Date.now();
+    setToasts(p => [...p, { id, message, type }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500);
+  }, []);
+
+  const handleLogin = (userData) => setUser(userData);
+
+  const handleLogout = () => {
+    localStorage.removeItem("ems_token");
+    localStorage.removeItem("ems_user");
+    setUser(null);
+  };
+
+  if (!user) return <LoginPage onLogin={handleLogin} />;
+
+  const pageProps = { addToast, user };
+
+  const PAGES = {
+    dashboard: <DashboardPage {...pageProps} />,
+    employees:  <EmployeesPage {...pageProps} />,
+    attendance: <AttendancePage {...pageProps} />,
+    worklogs:   <WorklogsPage {...pageProps} />,
+    salary:     <SalaryPage {...pageProps} />,
+    buyers:     <BuyersPage {...pageProps} />,
+    orders:     <OrdersPage {...pageProps} />,
+    analytics:  <AnalyticsPage {...pageProps} />,
+    company:    <CompanyPage {...pageProps} />,
+    audit:      <AuditPage {...pageProps} />,
+    profile:    <ProfilePage {...pageProps} />,
+    chat:       <ChatPage {...pageProps} />,
+    tools:      <ToolsPage {...pageProps} />,
+  };
+
+  return (
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      <Sidebar
+        active={activePage}
+        setActive={p => setActivePage(p)}
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        onLogout={handleLogout}
+        user={user}
+      />
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        <TopBar activePage={activePage} clock={clock} />
+        <div style={{ flex: 1, overflow: "hidden" }}>
+          {PAGES[activePage] || PAGES.dashboard}
+        </div>
+      </div>
+
+      <Toast toasts={toasts} />
+    </div>
   );
 }
