@@ -7,7 +7,7 @@ import {
   ChevronRight, ChevronDown, ChevronLeft,
   ClipboardList, Settings, UserPlus, Calendar, Moon,
   Maximize2, Activity, TrendingUp, MessageSquare,
-  Edit2, Trash2, Upload, RefreshCw,CheckSquare, Umbrella,
+  Edit2, Trash2, Upload, RefreshCw,CheckSquare,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar,
