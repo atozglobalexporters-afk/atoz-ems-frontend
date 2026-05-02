@@ -7,7 +7,7 @@ import {
   ChevronRight, ChevronDown, ChevronLeft,
   ClipboardList, Settings, UserPlus, Calendar, Moon,
   Maximize2, Activity, TrendingUp, MessageSquare,
-  Edit2, Trash2, Upload, RefreshCw,
+  Edit2, Trash2, Upload, RefreshCw,CheckSquare, Umbrella,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar,
@@ -15,6 +15,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import ChatPage from "./ChatPage";
+import { Umbrella, Briefcase, FileText as LeaveIcon } from "lucide-react";
 import ToolsPage from "./ToolsPage";
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -112,6 +113,9 @@ const ADMIN_NAV = [
     {id:"attendance",label:"Attendance",icon:CalendarCheck},
     {id:"worklogs",label:"Work Logs",icon:ClipboardList},
     {id:"chat",label:"Messages",icon:MessageSquare},
+    {id:"tasks",    label:"Tasks",    icon:CheckSquare},
+    {id:"leaves",   label:"Leaves",   icon:Umbrella},
+    {id:"holidays", label:"Holidays", icon:Calendar},
   ]},
   { section:"FINANCE", items:[
     {id:"salary",label:"Salary",icon:Wallet},
@@ -132,6 +136,8 @@ const EMP_NAV = [
     {id:"attendance",label:"My Attendance",icon:CalendarCheck},
     {id:"worklogs",label:"My Work Logs",icon:ClipboardList},
     {id:"chat",label:"Messages",icon:MessageSquare},
+    {id:"tasks",  label:"My Tasks",  icon:CheckSquare},
+    {id:"leaves", label:"My Leaves", icon:Umbrella},
   ]},
   { section:"PERSONAL", items:[
     {id:"salary",label:"My Salary",icon:Wallet},
@@ -2074,6 +2080,560 @@ function LoginPage({onLogin}){
   );
 }
 
+// ─── TASKS PAGE ───────────────────────────────────────────────────────────────
+function TasksPage({ addToast, user }) {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [search, setSearch] = useState("");
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState({ title: "", description: "", assignedTo: "", deadline: "", priority: "medium" });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [tR, uR] = await Promise.allSettled([
+        apiFetch("/tasks").then(r => r.json()),
+        isAdmin(user) ? apiFetch("/users").then(r => r.json()) : Promise.resolve([]),
+      ]);
+      setTasks(safeArr(tR.value, "tasks", "data"));
+      if (isAdmin(user)) setUsers(safeArr(uR.value, "users", "data"));
+    } catch { addToast("Failed to load tasks", "error"); }
+    setLoading(false);
+  }, [user]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = tasks.filter(t =>
+    !search || [t.title, t.description, t.assignedTo?.name].some(f => f?.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const handleSave = async () => {
+    if (!form.title || !form.assignedTo) return addToast("Title and assignee required", "error");
+    setSaving(true);
+    try {
+      const r = await apiFetch("/tasks", { method: "POST", body: JSON.stringify(form) });
+      if (!r.ok) throw new Error();
+      addToast("Task assigned", "success");
+      setModal(false);
+      setForm({ title: "", description: "", assignedTo: "", deadline: "", priority: "medium" });
+      load();
+    } catch { addToast("Failed to create task", "error"); }
+    setSaving(false);
+  };
+
+  const updateStatus = async (id, status) => {
+    try {
+      await apiFetch(`/tasks/${id}`, { method: "PUT", body: JSON.stringify({ status }) });
+      addToast(`Task marked ${status}`, "success");
+      load();
+    } catch { addToast("Failed to update", "error"); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this task?")) return;
+    try {
+      await apiFetch(`/tasks/${id}`, { method: "DELETE" });
+      addToast("Task deleted", "success");
+      load();
+    } catch { addToast("Failed", "error"); }
+  };
+
+  const priorityColor = (p) => {
+    if (p === "high") return C.red;
+    if (p === "medium") return C.amber;
+    return C.green;
+  };
+
+  const statusColor = (s) => {
+    if (s === "completed") return C.green;
+    if (s === "in_progress") return C.accent;
+    if (s === "cancelled") return C.red;
+    return C.amber;
+  };
+
+  return (
+    <PageShell
+      title={isAdmin(user) ? "Task Management" : "My Tasks"}
+      sub={isAdmin(user) ? "Assign and track employee tasks" : "Tasks assigned to you"}
+      actions={
+        <>
+          <Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks…" icon={Search} style={{ width: 220 }} />
+          {isAdmin(user) && <button className="btn-pri" onClick={() => setModal(true)}><Plus size={14} />Assign Task</button>}
+        </>
+      }
+    >
+      {loading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {Array(4).fill(0).map((_, i) => <Sk key={i} h={80} r={12} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "40px 20px", textAlign: "center", color: C.t2, fontSize: 14 }}>
+          No tasks found
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map(task => (
+            <div key={task._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>{task.title}</h3>
+                    <Badge label={(task.priority || "medium").toUpperCase()} color={priorityColor(task.priority)} />
+                    <Badge label={(task.status || "pending").replace("_", " ").toUpperCase()} color={statusColor(task.status)} />
+                  </div>
+                  {task.description && <p style={{ fontSize: 13, color: C.t2, marginBottom: 8 }}>{task.description}</p>}
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    {task.assignedTo && (
+                      <span style={{ fontSize: 12, color: C.t2 }}>
+                        👤 <span style={{ color: C.t1, fontWeight: 500 }}>{task.assignedTo?.name || "—"}</span>
+                      </span>
+                    )}
+                    {task.deadline && (
+                      <span style={{ fontSize: 12, color: new Date(task.deadline) < new Date() ? C.red : C.t2 }}>
+                        📅 {new Date(task.deadline).toLocaleDateString("en-IN")}
+                        {new Date(task.deadline) < new Date() && task.status !== "completed" && <span style={{ color: C.red, fontWeight: 600 }}> (Overdue)</span>}
+                      </span>
+                    )}
+                    {task.createdAt && (
+                      <span style={{ fontSize: 12, color: C.t3 }}>Created {new Date(task.createdAt).toLocaleDateString("en-IN")}</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {/* Employee can update status */}
+                  {!isAdmin(user) && task.status !== "completed" && (
+                    <>
+                      <button className="btn-icon" style={{ background: C.accentG, color: C.accent, width: "auto", padding: "4px 10px", borderRadius: 7, fontSize: 11, fontWeight: 600 }}
+                        onClick={() => updateStatus(task._id, "in_progress")}>In Progress</button>
+                      <button className="btn-icon" style={{ background: C.greenG, color: C.green, width: "auto", padding: "4px 10px", borderRadius: 7, fontSize: 11, fontWeight: 600 }}
+                        onClick={() => updateStatus(task._id, "completed")}>✓ Done</button>
+                    </>
+                  )}
+                  {/* Admin controls */}
+                  {isAdmin(user) && (
+                    <>
+                      {task.status !== "completed" && (
+                        <button className="btn-icon" style={{ background: C.greenG, color: C.green, width: "auto", padding: "4px 10px", borderRadius: 7, fontSize: 11, fontWeight: 600 }}
+                          onClick={() => updateStatus(task._id, "completed")}>✓ Complete</button>
+                      )}
+                      <button className="btn-icon" style={{ background: C.redG, color: C.red }} onClick={() => handleDelete(task._id)}><Trash2 size={13} /></button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal open={modal} onClose={() => setModal(false)} title="Assign New Task">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <FormField label="Task Title">
+            <Inp value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Complete monthly report" />
+          </FormField>
+          <FormField label="Description">
+            <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+              placeholder="Task details…" className="inp" style={{ height: 80, resize: "vertical" }} />
+          </FormField>
+          <FormField label="Assign To">
+            <select value={form.assignedTo} onChange={e => setForm(p => ({ ...p, assignedTo: e.target.value }))} className="inp" style={{ background: C.card, color: C.t1 }}>
+              <option value="" style={{ background: C.card }}>Select employee…</option>
+              {users.map(u => <option key={u._id} value={u._id} style={{ background: C.card, color: C.t1 }}>{u.name}</option>)}
+            </select>
+          </FormField>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Deadline">
+              <Inp value={form.deadline} onChange={e => setForm(p => ({ ...p, deadline: e.target.value }))} type="date" />
+            </FormField>
+            <FormField label="Priority">
+              <select value={form.priority} onChange={e => setForm(p => ({ ...p, priority: e.target.value }))} className="inp" style={{ background: C.card, color: C.t1 }}>
+                <option value="low" style={{ background: C.card }}>Low</option>
+                <option value="medium" style={{ background: C.card }}>Medium</option>
+                <option value="high" style={{ background: C.card }}>High</option>
+              </select>
+            </FormField>
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+            <button className="btn-ghost" onClick={() => setModal(false)}>Cancel</button>
+            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Assign Task"}</button>
+          </div>
+        </div>
+      </Modal>
+    </PageShell>
+  );
+}
+
+// ─── LEAVE PAGE ───────────────────────────────────────────────────────────────
+function LeavePage({ addToast, user }) {
+  const [leaves, setLeaves] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [search, setSearch] = useState("");
+  const [form, setForm] = useState({ reason: "", fromDate: "", toDate: "", type: "sick" });
+  const [file, setFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await apiFetch("/leaves");
+      const d = await r.json();
+      setLeaves(safeArr(d, "leaves", "data"));
+    } catch { addToast("Failed to load leaves", "error"); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = leaves.filter(l =>
+    !search || [l.userId?.name, l.reason, l.type].some(f => f?.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const handleSave = async () => {
+    if (!form.reason || !form.fromDate || !form.toDate) return addToast("All fields required", "error");
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v); });
+      if (file) fd.append("file", file);
+      const r = await fetch(`${API}/leaves`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: fd,
+      });
+      if (!r.ok) throw new Error();
+      addToast("Leave request submitted", "success");
+      setModal(false);
+      setForm({ reason: "", fromDate: "", toDate: "", type: "sick" });
+      setFile(null);
+      load();
+    } catch { addToast("Failed to submit", "error"); }
+    setSaving(false);
+  };
+
+  const updateLeaveStatus = async (id, status) => {
+    try {
+      const r = await apiFetch(`/leaves/${id}`, { method: "PUT", body: JSON.stringify({ status }) });
+      if (!r.ok) throw new Error();
+      addToast(`Leave ${status}`, "success");
+      load();
+    } catch { addToast("Failed to update", "error"); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Remove this leave request?")) return;
+    try {
+      await apiFetch(`/leaves/${id}`, { method: "DELETE" });
+      addToast("Removed", "success");
+      load();
+    } catch { addToast("Failed", "error"); }
+  };
+
+  const leaveStatusColor = (s) => {
+    if (s === "approved") return C.green;
+    if (s === "rejected") return C.red;
+    if (s === "removed") return C.t3;
+    return C.amber;
+  };
+
+  const getDays = (from, to) => {
+    if (!from || !to) return 0;
+    const diff = new Date(to) - new Date(from);
+    return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  return (
+    <PageShell
+      title={isAdmin(user) ? "Leave Management" : "My Leave Requests"}
+      sub={isAdmin(user) ? "Review and manage employee leaves" : "Request and track your leaves"}
+      actions={
+        <>
+          {isAdmin(user) && <Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" icon={Search} style={{ width: 220 }} />}
+          {!isAdmin(user) && <button className="btn-pri" onClick={() => setModal(true)}><Plus size={14} />Request Leave</button>}
+        </>
+      }
+    >
+      {/* Stats for admin */}
+      {isAdmin(user) && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
+          {[
+            { l: "Total Requests", v: leaves.length, c: C.accent },
+            { l: "Pending", v: leaves.filter(l => l.status === "pending" || !l.status).length, c: C.amber },
+            { l: "Approved", v: leaves.filter(l => l.status === "approved").length, c: C.green },
+            { l: "Rejected", v: leaves.filter(l => l.status === "rejected").length, c: C.red },
+          ].map(x => (
+            <div key={x.l} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 18px" }}>
+              <p style={{ fontSize: 11, color: C.t2, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>{x.l}</p>
+              <p style={{ fontSize: 24, fontWeight: 800, color: x.c }}>{x.v}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {Array(4).fill(0).map((_, i) => <Sk key={i} h={90} r={12} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "40px 20px", textAlign: "center", color: C.t2, fontSize: 14 }}>
+          No leave requests found
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map(leave => (
+            <div key={leave._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 20px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: C.accent }}>
+                      {(leave.userId?.name || user?.name || "?")[0]?.toUpperCase()}
+                    </div>
+                    <div>
+                      <p style={{ fontWeight: 600, fontSize: 14, color: C.t1 }}>{leave.userId?.name || user?.name || "—"}</p>
+                      <p style={{ fontSize: 11, color: C.t2 }}>{(leave.type || "sick").toUpperCase()} LEAVE</p>
+                    </div>
+                    <Badge label={(leave.status || "PENDING").toUpperCase()} color={leaveStatusColor(leave.status)} />
+                  </div>
+                  <p style={{ fontSize: 13, color: C.t2, marginBottom: 8 }}>{leave.reason}</p>
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: C.t2 }}>
+                      📅 {leave.fromDate ? new Date(leave.fromDate).toLocaleDateString("en-IN") : "—"} → {leave.toDate ? new Date(leave.toDate).toLocaleDateString("en-IN") : "—"}
+                    </span>
+                    <span style={{ fontSize: 12, color: C.accent, fontWeight: 600 }}>
+                      {getDays(leave.fromDate, leave.toDate)} day{getDays(leave.fromDate, leave.toDate) !== 1 ? "s" : ""}
+                    </span>
+                    {leave.fileUrl && (
+                      <a href={`${API.replace("/api", "")}${leave.fileUrl}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize: 12, color: C.accent, display: "flex", alignItems: "center", gap: 4 }}>
+                        <Upload size={11} /> Attachment
+                      </a>
+                    )}
+                    {leave.reviewedBy && (
+                      <span style={{ fontSize: 12, color: C.t3 }}>Reviewed by: {leave.reviewedBy?.name}</span>
+                    )}
+                  </div>
+                </div>
+                {isAdmin(user) && (
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0, flexDirection: "column", alignItems: "flex-end" }}>
+                    {leave.status !== "approved" && (
+                      <button className="btn-success" onClick={() => updateLeaveStatus(leave._id, "approved")}>✓ Approve</button>
+                    )}
+                    {leave.status !== "rejected" && (
+                      <button className="btn-danger" onClick={() => updateLeaveStatus(leave._id, "rejected")}>✗ Reject</button>
+                    )}
+                    {leave.status === "pending" || !leave.status ? (
+                      <button className="btn-ghost" style={{ padding: "5px 11px", fontSize: 12 }} onClick={() => updateLeaveStatus(leave._id, "pending")}>Pending</button>
+                    ) : null}
+                    <button className="btn-icon" style={{ background: C.redG, color: C.red }} onClick={() => handleDelete(leave._id)}><Trash2 size={13} /></button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal open={modal} onClose={() => setModal(false)} title="Request Leave">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <FormField label="Leave Type">
+            <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} className="inp" style={{ background: C.card, color: C.t1 }}>
+              {["sick", "casual", "annual", "emergency", "maternity", "paternity", "other"].map(t => (
+                <option key={t} value={t} style={{ background: C.card, color: C.t1 }}>{t.charAt(0).toUpperCase() + t.slice(1)} Leave</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Reason">
+            <textarea value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))}
+              placeholder="Explain the reason for leave…" className="inp" style={{ height: 80, resize: "vertical" }} />
+          </FormField>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="From Date">
+              <Inp value={form.fromDate} onChange={e => setForm(p => ({ ...p, fromDate: e.target.value }))} type="date" />
+            </FormField>
+            <FormField label="To Date">
+              <Inp value={form.toDate} onChange={e => setForm(p => ({ ...p, toDate: e.target.value }))} type="date" />
+            </FormField>
+          </div>
+          {form.fromDate && form.toDate && (
+            <div style={{ background: C.accentG, borderRadius: 8, padding: "8px 12px", fontSize: 13, color: C.accent }}>
+              Duration: {getDays(form.fromDate, form.toDate)} day{getDays(form.fromDate, form.toDate) !== 1 ? "s" : ""}
+            </div>
+          )}
+          <FormField label="Supporting Document (optional)">
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
+              <button className="btn-ghost" onClick={() => fileRef.current?.click()} style={{ padding: "7px 14px" }}><Upload size={14} />Attach File</button>
+              {file && <span style={{ fontSize: 12, color: C.green }}>{file.name}</span>}
+            </div>
+          </FormField>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+            <button className="btn-ghost" onClick={() => setModal(false)}>Cancel</button>
+            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Submitting…" : "Submit Request"}</button>
+          </div>
+        </div>
+      </Modal>
+    </PageShell>
+  );
+}
+
+// ─── HOLIDAY PAGE ─────────────────────────────────────────────────────────────
+function HolidayPage({ addToast, user }) {
+  const [holidays, setHolidays] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ name: "", date: "", type: "public", description: "" });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await apiFetch("/holidays");
+      const d = await r.json();
+      setHolidays(safeArr(d, "holidays", "data"));
+    } catch { addToast("Failed to load holidays", "error"); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSave = async () => {
+    if (!form.name || !form.date) return addToast("Name and date required", "error");
+    setSaving(true);
+    try {
+      const r = await apiFetch("/holidays", { method: "POST", body: JSON.stringify(form) });
+      if (!r.ok) throw new Error();
+      addToast("Holiday added", "success");
+      setModal(false);
+      setForm({ name: "", date: "", type: "public", description: "" });
+      load();
+    } catch { addToast("Failed to add holiday", "error"); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Remove this holiday?")) return;
+    try {
+      await apiFetch(`/holidays/${id}`, { method: "DELETE" });
+      addToast("Holiday removed", "success");
+      load();
+    } catch { addToast("Failed", "error"); }
+  };
+
+  const upcoming = holidays.filter(h => new Date(h.date) >= new Date()).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const past = holidays.filter(h => new Date(h.date) < new Date()).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const typeColor = (t) => {
+    if (t === "public") return C.accent;
+    if (t === "optional") return C.amber;
+    if (t === "restricted") return C.purple;
+    return C.green;
+  };
+
+  return (
+    <PageShell
+      title="Holidays"
+      sub={`${holidays.length} holidays this year`}
+      actions={isAdmin(user) ? <button className="btn-pri" onClick={() => setModal(true)}><Plus size={14} />Add Holiday</button> : null}
+    >
+      {loading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {Array(5).fill(0).map((_, i) => <Sk key={i} h={64} r={12} />)}
+        </div>
+      ) : holidays.length === 0 ? (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "40px 20px", textAlign: "center", color: C.t2, fontSize: 14 }}>
+          No holidays added yet. {isAdmin(user) && "Add the first holiday!"}
+        </div>
+      ) : (
+        <>
+          {upcoming.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 12 }}>
+                Upcoming Holidays <Badge label={String(upcoming.length)} color={C.green} />
+              </h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {upcoming.map(h => (
+                  <div key={h._id} style={{ background: C.card, border: `1px solid ${C.green}22`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ background: C.greenG, borderRadius: 10, padding: "10px 14px", textAlign: "center", minWidth: 60 }}>
+                        <p style={{ fontSize: 20, fontWeight: 800, color: C.green }}>{new Date(h.date).getDate()}</p>
+                        <p style={{ fontSize: 10, color: C.green, fontWeight: 600 }}>{new Date(h.date).toLocaleDateString("en-IN", { month: "short" }).toUpperCase()}</p>
+                      </div>
+                      <div>
+                        <p style={{ fontWeight: 700, fontSize: 14, color: C.t1, marginBottom: 3 }}>{h.name}</p>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <Badge label={(h.type || "public").toUpperCase()} color={typeColor(h.type)} />
+                          <span style={{ fontSize: 12, color: C.t2 }}>{new Date(h.date).toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</span>
+                        </div>
+                        {h.description && <p style={{ fontSize: 12, color: C.t3, marginTop: 3 }}>{h.description}</p>}
+                      </div>
+                    </div>
+                    {isAdmin(user) && (
+                      <button className="btn-icon" style={{ background: C.redG, color: C.red }} onClick={() => handleDelete(h._id)}><Trash2 size={13} /></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {past.length > 0 && (
+            <div>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Past Holidays</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {past.map(h => (
+                  <div key={h._id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", opacity: 0.7 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "8px 12px", textAlign: "center", minWidth: 54 }}>
+                        <p style={{ fontSize: 17, fontWeight: 800, color: C.t2 }}>{new Date(h.date).getDate()}</p>
+                        <p style={{ fontSize: 10, color: C.t3, fontWeight: 600 }}>{new Date(h.date).toLocaleDateString("en-IN", { month: "short" }).toUpperCase()}</p>
+                      </div>
+                      <div>
+                        <p style={{ fontWeight: 600, fontSize: 13, color: C.t2, marginBottom: 2 }}>{h.name}</p>
+                        <Badge label={(h.type || "public").toUpperCase()} color={C.t3} />
+                      </div>
+                    </div>
+                    {isAdmin(user) && (
+                      <button className="btn-icon" style={{ background: C.redG, color: C.red }} onClick={() => handleDelete(h._id)}><Trash2 size={13} /></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      <Modal open={modal} onClose={() => setModal(false)} title="Add Holiday">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <FormField label="Holiday Name">
+            <Inp value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Eid Al-Fitr" />
+          </FormField>
+          <FormField label="Date">
+            <Inp value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} type="date" />
+          </FormField>
+          <FormField label="Type">
+            <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} className="inp" style={{ background: C.card, color: C.t1 }}>
+              {["public", "optional", "restricted", "company"].map(t => (
+                <option key={t} value={t} style={{ background: C.card, color: C.t1 }}>{t.charAt(0).toUpperCase() + t.slice(1)} Holiday</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Description (optional)">
+            <Inp value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Holiday description…" />
+          </FormField>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+            <button className="btn-ghost" onClick={() => setModal(false)}>Cancel</button>
+            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Add Holiday"}</button>
+          </div>
+        </div>
+      </Modal>
+    </PageShell>
+  );
+}
+
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App(){
   injectCSS();
@@ -2113,6 +2673,9 @@ export default function App(){
     company:<CompanyPage {...props}/>,
     audit:<AuditPage {...props}/>,
     profile:<ProfilePage {...props}/>,
+    tasks:<TasksPage {...props}/>,
+    leaves:<LeavePage {...props}/>,
+    holidays:<HolidayPage {...props}/>,
     tools:<ToolsPage/>,
     chat:<ChatPage user={{id:user?._id||user?.id,name:user?.name,role:user?.role}} socket={null} onlineUsers={[]}/>,
   };
@@ -2123,6 +2686,8 @@ export default function App(){
     worklogs:<WorklogsPage {...props}/>,
     salary:<SalaryPage {...props}/>,
     profile:<ProfilePage {...props}/>,
+    tasks:<TasksPage {...props}/>,
+    leaves:<LeavePage {...props}/>,
     tools:<ToolsPage/>,
     chat:<ChatPage user={{id:user?._id||user?.id,name:user?.name,role:user?.role}} socket={null} onlineUsers={[]}/>,
   };
