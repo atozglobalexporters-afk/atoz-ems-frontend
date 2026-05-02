@@ -15,7 +15,6 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 import ChatPage from "./ChatPage";
-import { Umbrella, Briefcase, FileText as LeaveIcon } from "lucide-react";
 import ToolsPage from "./ToolsPage";
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -114,7 +113,7 @@ const ADMIN_NAV = [
     {id:"worklogs",label:"Work Logs",icon:ClipboardList},
     {id:"chat",label:"Messages",icon:MessageSquare},
     {id:"tasks",    label:"Tasks",    icon:CheckSquare},
-    {id:"leaves",   label:"Leaves",   icon:Umbrella},
+    {id:"leaves",   label:"Leaves",   icon:FileText},
     {id:"holidays", label:"Holidays", icon:Calendar},
   ]},
   { section:"FINANCE", items:[
@@ -137,7 +136,7 @@ const EMP_NAV = [
     {id:"worklogs",label:"My Work Logs",icon:ClipboardList},
     {id:"chat",label:"Messages",icon:MessageSquare},
     {id:"tasks",  label:"My Tasks",  icon:CheckSquare},
-    {id:"leaves", label:"My Leaves", icon:Umbrella},
+    {id:"leaves", label:"My Leaves", icon:FileText},
   ]},
   { section:"PERSONAL", items:[
     {id:"salary",label:"My Salary",icon:Wallet},
