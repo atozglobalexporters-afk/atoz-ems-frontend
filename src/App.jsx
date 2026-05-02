@@ -1097,7 +1097,7 @@ function LoginPage({ onLogin }) {
       <div className="fadeUp" style={{ width:"100%", maxWidth:400 }}>
         <div style={{ textAlign:"center", marginBottom:32 }}>
           <div style={{ width:56, height:56, borderRadius:16, background:`linear-gradient(135deg,${C.accent},${C.purple})`, display:"inline-flex", alignItems:"center", justifyContent:"center", marginBottom:16, boxShadow:`0 8px 32px rgba(99,102,241,0.4)` }}><Building2 size={26} color="#fff"/></div>
-          <h1 style={{ fontSize:24, fontWeight:800, color:C.t1, letterSpacing:"-.02em", marginBottom:8 }}>AtoZ EMS</h1>
+          <h1 style={{ fontSize:24, fontWeight:800, color:C.t1, letterSpacing:"-.02em", marginBottom:8 }}>Nexus Login Portal</h1>
           <p style={{ fontSize:13, color:C.t2 }}>Sign in to your workspace</p>
         </div>
         <div style={{ background:C.panel, border:`1px solid ${C.border}`, borderRadius:18, padding:28, boxShadow:"0 24px 64px rgba(0,0,0,0.6)" }}>
