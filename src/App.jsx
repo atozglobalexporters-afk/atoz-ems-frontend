@@ -771,188 +771,328 @@ function EmployeesPage({addToast,user}){
   );
 }
 
-// ─── ATTENDANCE ───────────────────────────────────────────────────────────────
-function AttendancePage({addToast,user}){
-  const [records,setRecords]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [tab,setTab]=useState("daily");
-  const [month,setMonth]=useState(new Date().getMonth()+1);
-  const [year,setYear]=useState(new Date().getFullYear());
-  const [overrideModal,setOverrideModal]=useState(false);
-  const [overrideForm,setOverrideForm]=useState({userId:"",date:new Date().toISOString().split("T")[0],status:"present",note:""});
-  const [users,setUsers]=useState([]);
-  const [checkLoading,setCheckLoading]=useState(false);
-  const [todayRec,setTodayRec]=useState(null);
-  const [settings,setSettings]=useState(null);
-  const [search,setSearch]=useState("");
+// ─── ATTENDANCE PAGE — FULL REPLACEMENT ──────────────────────
+// Replace your existing AttendancePage function in App.jsx with this one
 
-  const load=useCallback(async()=>{
+function AttendancePage({ addToast, user }) {
+  const [records, setRecords]         = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [tab, setTab]                 = useState("daily");
+  const [month, setMonth]             = useState(new Date().getMonth() + 1);
+  const [year, setYear]               = useState(new Date().getFullYear());
+  const [overrideModal, setOverrideModal] = useState(false);
+  const [correctionModal, setCorrectionModal] = useState(false);
+  const [correctionTarget, setCorrectionTarget] = useState(null);
+  const [corrections, setCorrections] = useState([]);
+  const [overrideForm, setOverrideForm] = useState({ userId: "", date: new Date().toISOString().split("T")[0], status: "present", checkIn: "", checkOut: "", note: "" });
+  const [correctionForm, setCorrectionForm] = useState({ reason: "", requestedCheckIn: "", requestedCheckOut: "" });
+  const [users, setUsers]             = useState([]);
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [todayRec, setTodayRec]       = useState(null);
+  const [liveStatus, setLiveStatus]   = useState("not_started");
+  const [liveHours, setLiveHours]     = useState(0);
+  const [sessionTimer, setSessionTimer] = useState(0); // seconds since check-in
+  const [settings, setSettings]       = useState(null);
+  const [search, setSearch]           = useState("");
+  const timerRef                      = useRef(null);
+
+  // ── Load data ────────────────────────────────────────────────
+  const load = useCallback(async () => {
     setLoading(true);
-    try{
-      if(isAdmin(user)){
-        const [aR,uR,sR]=await Promise.allSettled([
-          apiFetch(tab==="monthly"?`/attendance?month=${month}&year=${year}`:"/attendance").then(r=>r.json()),
-          apiFetch("/users").then(r=>r.json()),
-          apiFetch("/company").then(r=>r.json()),
+    try {
+      if (isAdmin(user)) {
+        const [aR, uR, sR, cR] = await Promise.allSettled([
+          apiFetch(tab === "monthly" ? `/attendance?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
+          apiFetch("/users").then(r => r.json()),
+          apiFetch("/company").then(r => r.json()),
+          apiFetch("/attendance/corrections").then(r => r.json()),
         ]);
-        setRecords(safeArr(aR.value,"attendance","records","data"));
-        setUsers(safeArr(uR.value,"users","data"));
-        setSettings(sR.value?.company||sR.value);
+        setRecords(safeArr(aR.value, "attendance", "records", "data"));
+        setUsers(safeArr(uR.value, "users", "data"));
+        setSettings(sR.value?.company || sR.value);
+        setCorrections(safeArr(cR.value, "corrections", "data"));
       } else {
-        const [aR,sR]=await Promise.allSettled([
-          apiFetch(tab==="monthly"?`/attendance/monthly?month=${month}&year=${year}`:"/attendance/today").then(r=>r.json()),
-          apiFetch("/company").then(r=>r.json()),
+        const [aR, sR, tR] = await Promise.allSettled([
+          apiFetch(tab === "monthly" ? `/attendance/monthly?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
+          apiFetch("/company").then(r => r.json()),
+          apiFetch("/attendance/today").then(r => r.json()),
         ]);
-        const recs=safeArr(aR.value,"attendance","records","data");
-        setRecords(recs);
-        setSettings(sR.value?.company||sR.value);
-        const today=new Date().toDateString();
-        setTodayRec(recs.find(r=>r.date&&new Date(r.date).toDateString()===today)||null);
+        setRecords(safeArr(aR.value, "attendance", "records", "data"));
+        setSettings(sR.value?.company || sR.value);
+        if (tR.value?.attendance !== undefined) {
+          setTodayRec(tR.value.attendance);
+          setLiveStatus(tR.value.liveStatus || "not_started");
+          setLiveHours(tR.value.liveHours || 0);
+        }
       }
-    }catch{addToast("Failed to load attendance","error");}
+    } catch { addToast("Failed to load attendance", "error"); }
     setLoading(false);
-  },[tab,month,year,user]);
+  }, [tab, month, year, user]);
 
-  useEffect(()=>{load();},[load]);
+  useEffect(() => { load(); }, [load]);
 
-  const handleCheckIn=async()=>{
+  // ── Live session timer ────────────────────────────────────────
+  useEffect(() => {
+    if (liveStatus === "working" && todayRec?.checkIn) {
+      const start = new Date(todayRec.checkIn).getTime();
+      const tick = () => setSessionTimer(Math.floor((Date.now() - start) / 1000));
+      tick();
+      timerRef.current = setInterval(tick, 1000);
+    } else {
+      clearInterval(timerRef.current);
+      setSessionTimer(0);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [liveStatus, todayRec]);
+
+  const formatTimer = (secs) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  };
+
+  // ── Check In ─────────────────────────────────────────────────
+  const handleCheckIn = async () => {
     setCheckLoading(true);
-    try{
-      const r=await apiFetch("/attendance/login",{method:"POST"});
-      const d=await r.json();
-      if(!r.ok) throw new Error(d.message);
-      addToast(`Checked in — ${d.attendance?.status||"Recorded"}`,"success");load();
-    }catch(e){addToast(e.message||"Check-in failed","error");}
+    try {
+      const r = await apiFetch("/attendance/login", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message);
+      addToast(d.message || "Checked in!", "success");
+      load();
+    } catch (e) { addToast(e.message || "Check-in failed", "error"); }
     setCheckLoading(false);
   };
 
-  const handleCheckOut=async()=>{
+  // ── Check Out ────────────────────────────────────────────────
+  const handleCheckOut = async () => {
     setCheckLoading(true);
-    try{
-      const r=await apiFetch("/attendance/checkout",{method:"POST"});
-      if(!r.ok) throw new Error();
-      addToast("Checked out successfully","success");load();
-    }catch(e){addToast(e.message||"Check-out failed","error");}
+    try {
+      const r = await apiFetch("/attendance/checkout", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message);
+      addToast(d.message || "Checked out!", "success");
+      load();
+    } catch (e) { addToast(e.message || "Check-out failed", "error"); }
     setCheckLoading(false);
   };
 
-  const handleOverride=async()=>{
-    try{
-      const r=await apiFetch("/attendance/admin-override",{method:"PUT",body:JSON.stringify(overrideForm)});
-      if(!r.ok) throw new Error();
-      addToast("Attendance overridden","success");setOverrideModal(false);load();
-    }catch{addToast("Failed to override","error");}
+  // ── Admin override ───────────────────────────────────────────
+  const handleOverride = async () => {
+    try {
+      const r = await apiFetch("/attendance/admin-override", { method: "PUT", body: JSON.stringify(overrideForm) });
+      if (!r.ok) throw new Error();
+      addToast("Attendance updated", "success");
+      setOverrideModal(false);
+      load();
+    } catch { addToast("Failed to override", "error"); }
   };
 
-  const filtered=records.filter(r=>{
-    if(!search) return true;
-    const name=r.userId?.name||r.employeeName||"";
+  // ── Auto-absent trigger (admin) ──────────────────────────────
+  const handleAutoAbsent = async () => {
+    if (!confirm("Mark all employees with no session today as Absent?")) return;
+    try {
+      const r = await apiFetch("/attendance/auto-absent", { method: "POST" });
+      const d = await r.json();
+      addToast(d.message || "Done", "success");
+      load();
+    } catch { addToast("Failed", "error"); }
+  };
+
+  // ── Auto-end sessions (admin) ────────────────────────────────
+  const handleAutoEnd = async () => {
+    if (!confirm("Force-end all active sessions now?")) return;
+    try {
+      const r = await apiFetch("/attendance/auto-end", { method: "POST" });
+      const d = await r.json();
+      addToast(d.message || "Done", "success");
+      load();
+    } catch { addToast("Failed", "error"); }
+  };
+
+  // ── Submit correction (employee) ─────────────────────────────
+  const handleCorrection = async () => {
+    if (!correctionForm.reason) return addToast("Reason required", "error");
+    try {
+      const r = await apiFetch("/attendance/correction", {
+        method: "POST",
+        body: JSON.stringify({ date: correctionTarget?.date?.split("T")[0], ...correctionForm }),
+      });
+      if (!r.ok) throw new Error();
+      addToast("Correction request submitted!", "success");
+      setCorrectionModal(false);
+      setCorrectionForm({ reason: "", requestedCheckIn: "", requestedCheckOut: "" });
+      load();
+    } catch { addToast("Failed to submit", "error"); }
+  };
+
+  // ── Review correction (admin) ────────────────────────────────
+  const handleReviewCorrection = async (id, action) => {
+    const adminNote = action === "rejected" ? prompt("Rejection reason (optional):") || "" : "";
+    try {
+      const r = await apiFetch(`/attendance/correction/${id}`, { method: "PUT", body: JSON.stringify({ action, adminNote }) });
+      if (!r.ok) throw new Error();
+      addToast(`Correction ${action}`, "success");
+      load();
+    } catch { addToast("Failed", "error"); }
+  };
+
+  // ── Derived stats ────────────────────────────────────────────
+  const filtered = records.filter(r => {
+    if (!search) return true;
+    const name = r.userId?.name || r.user?.name || r.employeeName || "";
     return name.toLowerCase().includes(search.toLowerCase());
   });
+  const present = filtered.filter(r => ["present","on_time","early"].includes(r.status?.toLowerCase())).length;
+  const absent  = filtered.filter(r => r.status?.toLowerCase() === "absent").length;
+  const late    = filtered.filter(r => r.status?.toLowerCase() === "late").length;
+  const halfDay = filtered.filter(r => r.status?.toLowerCase() === "half_day").length;
+  const total   = filtered.length || 1;
 
-  // Stats
-  const present=filtered.filter(r=>["present","on_time","early"].includes(r.status?.toLowerCase())).length;
-  const absent=filtered.filter(r=>r.status?.toLowerCase()==="absent").length;
-  const late=filtered.filter(r=>r.status?.toLowerCase()==="late").length;
-  const halfDay=filtered.filter(r=>r.status?.toLowerCase()==="half_day").length;
-  const total=filtered.length||1;
-
-  // Calendar for monthly view
-  const getDaysInMonth=(m,y)=>new Date(y,m,0).getDate();
-  const getDotColor=(status)=>{
-    const sl=status?.toLowerCase();
-    if(["present","on_time","early"].includes(sl)) return C.green;
-    if(sl==="absent") return C.red;
-    if(sl==="late") return C.amber;
-    if(sl==="half_day") return C.blue;
+  const getDotColor = s => {
+    const sl = s?.toLowerCase();
+    if (["present","on_time","early"].includes(sl)) return C.green;
+    if (sl === "absent") return C.red;
+    if (sl === "late")   return C.amber;
+    if (sl === "half_day") return C.blue;
     return C.t3;
   };
+  const formatTime = t => { if (!t) return "—"; try { return new Date(t).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }); } catch { return t; } };
+  const formatDate = t => { if (!t) return "—"; try { return new Date(t).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); } catch { return t; } };
+  const getFlagBadge = flags => (flags || []).map(f => (
+    <span key={f} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 20, marginLeft: 4, fontWeight: 700,
+      background: f === "late" ? C.amberG : f === "early_logout" ? C.orangeG : f === "insufficient_hours" ? C.redG : C.blueG,
+      color: f === "late" ? C.amber : f === "early_logout" ? C.orange : f === "insufficient_hours" ? C.red : C.blue,
+    }}>{f.replace(/_/g," ")}</span>
+  ));
 
-  const formatTime=(t)=>{
-    if(!t) return "—";
-    try{
-      const d=new Date(t);
-      return d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true});
-    }catch{return t;}
+  // Live status display config
+  const liveStatusConfig = {
+    not_started: { label: "Not Started",    color: C.t3,   bg: "rgba(255,255,255,0.04)" },
+    working:     { label: "Currently Working", color: C.green, bg: C.greenG },
+    completed:   { label: "Session Complete",  color: C.accent, bg: C.accentG },
   };
+  const lsc = liveStatusConfig[liveStatus] || liveStatusConfig.not_started;
 
-  const formatDate=(t)=>{
-    if(!t) return "—";
-    try{return new Date(t).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});}
-    catch{return t;}
-  };
+  const getDaysInMonth = (m, y) => new Date(y, m, 0).getDate();
 
-  return(
-    <PageShell title="Attendance" sub={isAdmin(user)?"Manage employee attendance":"Your attendance records"}
+  return (
+    <PageShell
+      title="Attendance"
+      sub={isAdmin(user) ? "Session-based attendance management" : "Your attendance & session"}
       actions={
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          <button className={`tab-btn ${tab==="daily"?"active":""}`} onClick={()=>setTab("daily")}>Daily</button>
-          <button className={`tab-btn ${tab==="monthly"?"active":""}`} onClick={()=>setTab("monthly")}>Monthly</button>
-          {tab==="monthly"&&(
-            <>
-              <select value={month} onChange={e=>setMonth(Number(e.target.value))} className="inp" style={{width:"auto",background:C.card,color:C.t1,border:`1px solid ${C.border}`}}>
-                {MONTHS.map((m,i)=><option key={i} value={i+1} style={{background:C.card,color:C.t1}}>{m}</option>)}
-              </select>
-              <select value={year} onChange={e=>setYear(Number(e.target.value))} className="inp" style={{width:"auto",background:C.card,color:C.t1,border:`1px solid ${C.border}`}}>
-                {[2023,2024,2025,2026,2027].map(y=><option key={y} value={y} style={{background:C.card,color:C.t1}}>{y}</option>)}
-              </select>
-            </>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button className={`tab-btn ${tab === "daily" ? "active" : ""}`}   onClick={() => setTab("daily")}>Daily</button>
+          <button className={`tab-btn ${tab === "monthly" ? "active" : ""}`} onClick={() => setTab("monthly")}>Monthly</button>
+          {tab === "monthly" && <>
+            <select value={month} onChange={e => setMonth(Number(e.target.value))} className="inp" style={{ width: "auto" }}>
+              {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+            </select>
+            <select value={year} onChange={e => setYear(Number(e.target.value))} className="inp" style={{ width: "auto" }}>
+              {[2023,2024,2025,2026,2027].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </>}
+          {isAdmin(user) && <Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search employee…" icon={Search} style={{ width: 180 }} />}
+          {isAdmin(user) && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="btn-pri" onClick={() => setOverrideModal(true)}><Edit2 size={14} />Mark Attendance</button>
+              <button className="btn-ghost" onClick={handleAutoAbsent} style={{ fontSize: 12 }}>Auto Absent</button>
+              <button className="btn-ghost" onClick={handleAutoEnd}    style={{ fontSize: 12 }}>Auto End Sessions</button>
+            </div>
           )}
-          {isAdmin(user)&&<Inp value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search employee…" icon={Search} style={{width:180}}/>}
-          {isAdmin(user)&&<button className="btn-pri" onClick={()=>setOverrideModal(true)}><Edit2 size={14}/>Mark Attendance</button>}
         </div>
       }
     >
-      {/* Stats row */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+      {/* ── Stat cards ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
         {[
-          {l:"Present",v:present,pct:Math.round(present/total*100),c:C.green,bg:C.greenG},
-          {l:"Absent",v:absent,pct:Math.round(absent/total*100),c:C.red,bg:C.redG},
-          {l:"Late",v:late,pct:Math.round(late/total*100),c:C.amber,bg:C.amberG},
-          {l:"Half Day",v:halfDay,pct:Math.round(halfDay/total*100),c:C.blue,bg:C.blueG||"rgba(59,130,246,0.12)"},
-        ].map(x=>(
-          <div key={x.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"16px 20px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-              <div style={{width:36,height:36,borderRadius:10,background:x.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <div style={{width:14,height:14,borderRadius:"50%",background:x.c}}/>
-              </div>
-              <span style={{fontSize:12,color:C.t2,fontWeight:600}}>{x.l}</span>
+          { l: "Present", v: present, pct: Math.round(present/total*100), c: C.green },
+          { l: "Absent",  v: absent,  pct: Math.round(absent/total*100),  c: C.red },
+          { l: "Late",    v: late,    pct: Math.round(late/total*100),    c: C.amber },
+          { l: "Half Day",v: halfDay, pct: Math.round(halfDay/total*100), c: C.blue },
+        ].map(x => (
+          <div key={x.l} className="card" style={{ padding: "16px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: x.c }} />
+              <span style={{ fontSize: 12, color: C.t2, fontWeight: 600 }}>{x.l}</span>
             </div>
-            <p style={{fontSize:28,fontWeight:800,color:x.c,marginBottom:4}}>{x.v}</p>
-            <p style={{fontSize:12,color:C.t2}}>{x.pct}% of total</p>
+            <p style={{ fontSize: 28, fontWeight: 800, color: x.c, marginBottom: 4 }}>{x.v}</p>
+            <p style={{ fontSize: 12, color: C.t2 }}>{x.pct}% of total</p>
           </div>
         ))}
       </div>
 
-      {/* Employee check-in section */}
-      {!isAdmin(user)&&(
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      {/* ── Pending corrections banner (admin) ── */}
+      {isAdmin(user) && corrections.length > 0 && (
+        <div style={{ background: C.amberG, border: `1px solid ${C.amber}44`, borderRadius: 12, padding: "14px 18px", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>⚠ {corrections.length} Pending Correction Request{corrections.length > 1 ? "s" : ""}</span>
+          </div>
+          {corrections.map((c, i) => (
+            <div key={c._id || i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: i < corrections.length - 1 ? `1px solid ${C.amber}22` : "none" }}>
+              <div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{c.user?.name || "—"}</span>
+                <span style={{ fontSize: 12, color: C.t2, marginLeft: 10 }}>{c.date} — {c.correctionRequest?.reason}</span>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="btn-success" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => handleReviewCorrection(c._id, "approved")}><CheckCircle2 size={11} />Approve</button>
+                <button className="btn-danger"  style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => handleReviewCorrection(c._id, "rejected")}><X size={11} />Reject</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Employee today panel ── */}
+      {!isAdmin(user) && (
+        <div className="card" style={{ padding: 22, marginBottom: 16, border: `1px solid ${lsc.color}33` }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+            {/* Live status + timer */}
             <div>
-              <h2 style={{fontSize:15,fontWeight:700,color:C.t1}}>Today's Status</h2>
-              {settings?.sessionStartTime&&(
-                <p style={{fontSize:12,color:C.t2,marginTop:4}}>
-                  Session: {settings.sessionStartTime} — {settings.sessionEndTime} · Grace: {settings.gracePeriod||0} min
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: lsc.color, animation: liveStatus === "working" ? "blink 2s infinite" : "none" }} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: lsc.color }}>{lsc.label}</span>
+              </div>
+              {liveStatus === "working" && (
+                <div style={{ fontSize: 30, fontWeight: 900, color: C.t1, fontVariantNumeric: "tabular-nums", letterSpacing: ".04em" }}>
+                  {formatTimer(sessionTimer)}
+                </div>
+              )}
+              {liveStatus === "completed" && (
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.accent }}>{liveHours.toFixed(2)}h worked</div>
+              )}
+              {settings?.sessionStartTime && (
+                <p style={{ fontSize: 12, color: C.t2, marginTop: 6 }}>
+                  Session: {settings.sessionStartTime} — {settings.sessionEndTime}
+                  {settings.gracePeriodMinutes && ` · ${settings.gracePeriodMinutes}min grace`}
                 </p>
               )}
-              {todayRec&&(
-                <div style={{display:"flex",gap:16,marginTop:8,flexWrap:"wrap"}}>
-                  <span style={{fontSize:12,color:C.t2}}>Check-in: <span style={{color:C.green,fontWeight:600}}>{formatTime(todayRec.checkIn||todayRec.loginTime)}</span></span>
-                  <span style={{fontSize:12,color:C.t2}}>Check-out: <span style={{color:C.red,fontWeight:600}}>{formatTime(todayRec.checkOut||todayRec.logoutTime)}</span></span>
-                  {todayRec.lateBy>0&&<span style={{fontSize:12,color:C.amber,fontWeight:600}}>{todayRec.lateBy} min late</span>}
+              {todayRec && (
+                <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+                  <span style={{ fontSize: 12, color: C.t2 }}>In: <span style={{ color: C.green, fontWeight: 600 }}>{formatTime(todayRec.checkIn || todayRec.loginTime)}</span></span>
+                  {todayRec.checkOut && <span style={{ fontSize: 12, color: C.t2 }}>Out: <span style={{ color: C.red, fontWeight: 600 }}>{formatTime(todayRec.checkOut)}</span></span>}
+                  {(todayRec.flags || []).length > 0 && <span style={{ fontSize: 12, color: C.t2 }}>Flags: {getFlagBadge(todayRec.flags)}</span>}
                 </div>
               )}
             </div>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              {todayRec&&statusBadge(todayRec.status)}
-              {!todayRec?.checkIn&&!todayRec?.loginTime&&(
-                <button className="btn-pri" onClick={handleCheckIn} disabled={checkLoading}>
-                  <CheckCircle2 size={14}/>{checkLoading?"…":"Check In"}
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              {todayRec && statusBadge(todayRec.status)}
+              {liveStatus === "not_started" && (
+                <button className="btn-pri" onClick={handleCheckIn} disabled={checkLoading} style={{ padding: "11px 22px", fontSize: 14 }}>
+                  <CheckCircle2 size={15} />{checkLoading ? "…" : "Start Work Session"}
                 </button>
               )}
-              {(todayRec?.checkIn||todayRec?.loginTime)&&!todayRec?.checkOut&&!todayRec?.logoutTime&&(
-                <button className="btn-danger" style={{padding:"8px 16px",fontSize:13}} onClick={handleCheckOut} disabled={checkLoading}>
-                  <AlertCircle size={14}/>{checkLoading?"…":"Check Out"}
+              {liveStatus === "working" && (
+                <button onClick={handleCheckOut} disabled={checkLoading} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 22px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#fff", background: `linear-gradient(135deg,${C.red},#dc2626)`, boxShadow: `0 4px 16px rgba(239,68,68,0.35)` }}>
+                  <AlertCircle size={15} />{checkLoading ? "…" : "End Work Session"}
+                </button>
+              )}
+              {liveStatus === "completed" && (
+                <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => { setCorrectionTarget(todayRec); setCorrectionModal(true); }}>
+                  Request Correction
                 </button>
               )}
             </div>
@@ -960,39 +1100,33 @@ function AttendancePage({addToast,user}){
         </div>
       )}
 
-      {/* Monthly calendar view */}
-      {tab==="monthly"&&(
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:20,marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-            <h2 style={{fontSize:15,fontWeight:700,color:C.t1}}>{MONTHS[month-1]} {year}</h2>
-            <div style={{display:"flex",gap:16}}>
-              {[{c:C.green,l:"Present"},{c:C.amber,l:"Late"},{c:C.red,l:"Absent"},{c:C.blue,l:"Half Day"}].map(x=>(
-                <div key={x.l} style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:C.t2}}>
-                  <div style={{width:8,height:8,borderRadius:"50%",background:x.c}}/>{x.l}
-                </div>
+      {/* ── Monthly calendar ── */}
+      {tab === "monthly" && (
+        <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>{MONTHS[month-1]} {year}</h2>
+            <div style={{ display: "flex", gap: 16 }}>
+              {[{ c: C.green, l: "Present" },{ c: C.amber, l: "Late" },{ c: C.red, l: "Absent" },{ c: C.blue, l: "Half Day" }].map(x => (
+                <div key={x.l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.t2 }}><div style={{ width: 8, height: 8, borderRadius: "50%", background: x.c }} />{x.l}</div>
               ))}
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
-            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>(
-              <div key={d} style={{textAlign:"center",fontSize:11,fontWeight:700,color:C.t3,padding:"6px 0"}}>{d}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
+            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
+              <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: C.t3, padding: "6px 0" }}>{d}</div>
             ))}
-            {Array.from({length:new Date(year,month-1,1).getDay()}).map((_,i)=><div key={`e${i}`}/>)}
-            {Array.from({length:getDaysInMonth(month,year)}).map((_,i)=>{
-              const day=i+1;
-              const dateStr=`${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-              const recs=filtered.filter(r=>{
-                if(!r.date) return false;
-                const d=new Date(r.date);
-                return d.getDate()===day&&d.getMonth()===month-1&&d.getFullYear()===year;
-              });
-              const isToday=new Date().toDateString()===new Date(year,month-1,day).toDateString();
-              return(
-                <div key={day} style={{background:isToday?C.accentG:"rgba(255,255,255,0.02)",border:`1px solid ${isToday?C.accent+"44":C.border}`,borderRadius:10,padding:"8px 6px",minHeight:56,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                  <span style={{fontSize:12,fontWeight:isToday?700:400,color:isToday?C.accent:C.t2}}>{day}</span>
-                  <div style={{display:"flex",gap:2,flexWrap:"wrap",justifyContent:"center"}}>
-                    {recs.slice(0,4).map((r,ri)=>(
-                      <div key={ri} title={`${r.userId?.name||"Employee"}: ${r.status}`} style={{width:7,height:7,borderRadius:"50%",background:getDotColor(r.status)}}/>
+            {Array.from({ length: new Date(year, month-1, 1).getDay() }).map((_, i) => <div key={`e${i}`} />)}
+            {Array.from({ length: getDaysInMonth(month, year) }).map((_, i) => {
+              const day = i + 1;
+              const recs = filtered.filter(r => { if (!r.date) return false; const d = new Date(r.date); return d.getDate()===day && d.getMonth()===month-1 && d.getFullYear()===year; });
+              const isToday = new Date().toDateString() === new Date(year, month-1, day).toDateString();
+              return (
+                <div key={day} style={{ background: isToday ? C.accentG : "rgba(255,255,255,0.02)", border: `1px solid ${isToday ? C.accent+"44" : C.border}`, borderRadius: 10, padding: "8px 6px", minHeight: 56, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? C.accent : C.t2 }}>{day}</span>
+                  <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
+                    {recs.slice(0,4).map((r, ri) => (
+                      <div key={ri} title={`${r.user?.name||r.userId?.name||"Employee"}: ${r.status}${(r.flags||[]).length ? " · "+r.flags.join(", ") : ""}`}
+                        style={{ width: 7, height: 7, borderRadius: "50%", background: getDotColor(r.status) }} />
                     ))}
                   </div>
                 </div>
@@ -1002,76 +1136,120 @@ function AttendancePage({addToast,user}){
         </div>
       )}
 
-      {/* Table */}
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
-        <table style={{width:"100%",borderCollapse:"collapse"}}>
+      {/* ── Records table ── */}
+      <div className="card" style={{ overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{borderBottom:`1px solid ${C.border}`}}>
-              {["Employee","Date","Check In","Check Out","Late By","Hours","Status",...(isAdmin(user)?["Action"]:[])].map(h=>(
-                <th key={h} style={{padding:"11px 16px",textAlign:"left",fontSize:10,fontWeight:700,color:C.t3,letterSpacing:".07em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
+            <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+              {["Employee","Date","Check In","Check Out","Hours","Status","Flags",...(isAdmin(user) ? ["Actions"] : [""])].map(h => (
+                <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: ".07em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {loading?Array(5).fill(0).map((_,i)=>(
-              <tr key={i} className="tr">
-                {Array(isAdmin(user)?8:7).fill(0).map((_,j)=><td key={j} style={{padding:"13px 16px"}}><Sk h={13}/></td>)}
-              </tr>
-            )):filtered.length===0?(
-              <tr><td colSpan={isAdmin(user)?8:7} style={{padding:"40px 16px",textAlign:"center",fontSize:13,color:C.t2}}>No attendance records</td></tr>
-            ):filtered.map((row,i)=>(
-              <tr key={row._id||i} className="tr">
-                <td style={{padding:"12px 16px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:9}}>
-                    <div style={{width:30,height:30,borderRadius:8,background:C.accentG,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:C.accent,flexShrink:0}}>
-                      {(row.userId?.name||row.employeeName||user?.name||"?")[0]?.toUpperCase()}
+            {loading ? Array(5).fill(0).map((_, i) => (
+              <tr key={i} className="tr">{Array(8).fill(0).map((_, j) => <td key={j} style={{ padding: "13px 16px" }}><Sk h={13} /></td>)}</tr>
+            )) : filtered.length === 0 ? (
+              <tr><td colSpan={8} style={{ padding: "40px 16px", textAlign: "center", fontSize: 13, color: C.t2 }}>No attendance records</td></tr>
+            ) : filtered.map((row, i) => (
+              <tr key={row._id || i} className="tr">
+                <td style={{ padding: "12px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.accent, flexShrink: 0 }}>
+                      {(row.userId?.name || row.user?.name || row.employeeName || user?.name || "?")[0]?.toUpperCase()}
                     </div>
                     <div>
-                      <p style={{fontWeight:600,fontSize:13}}>{row.userId?.name||row.employeeName||user?.name||"—"}</p>
-                      {row.userId?.department&&<p style={{fontSize:11,color:C.t2}}>{row.userId.department}</p>}
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>{row.userId?.name || row.user?.name || row.employeeName || user?.name || "—"}</p>
+                      {(row.userId?.department || row.user?.department) && <p style={{ fontSize: 11, color: C.t2 }}>{row.userId?.department || row.user?.department}</p>}
                     </div>
                   </div>
                 </td>
-                <td style={{padding:"12px 16px",fontSize:13,color:C.t2}}>{formatDate(row.date)}</td>
-                <td style={{padding:"12px 16px",fontSize:13,color:C.green,fontWeight:500}}>{formatTime(row.checkIn||row.loginTime)}</td>
-                <td style={{padding:"12px 16px",fontSize:13,color:C.red,fontWeight:500}}>{formatTime(row.checkOut||row.logoutTime)}</td>
-                <td style={{padding:"12px 16px",fontSize:13}}>{row.lateBy>0?<span style={{color:C.amber,fontWeight:600}}>{row.lateBy} min</span>:"—"}</td>
-                <td style={{padding:"12px 16px",fontSize:13}}>{row.hoursWorked?<span style={{color:C.accent,fontWeight:600}}>{row.hoursWorked}h</span>:"—"}</td>
-                <td style={{padding:"12px 16px"}}>{statusBadge(row.status||"unknown")}</td>
-                {isAdmin(user)&&(
-                  <td style={{padding:"12px 16px"}}>
-                    <button className="btn-icon" style={{background:C.accentG,color:C.accent}} onClick={()=>{
-                      setOverrideForm({userId:row.userId?._id||row.userId||"",date:row.date?new Date(row.date).toISOString().split("T")[0]:new Date().toISOString().split("T")[0],status:row.status||"present",note:""});
-                      setOverrideModal(true);
-                    }} title="Edit attendance"><Edit2 size={13}/></button>
-                  </td>
-                )}
+                <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{formatDate(row.date)}</td>
+                <td style={{ padding: "12px 16px", fontSize: 13, color: C.green, fontWeight: 500 }}>{formatTime(row.checkIn || row.loginTime)}</td>
+                <td style={{ padding: "12px 16px", fontSize: 13, color: row.sessionActive ? C.amber : C.red, fontWeight: 500 }}>
+                  {row.sessionActive ? <span style={{ fontSize: 11, background: C.greenG, color: C.green, padding: "2px 8px", borderRadius: 20, fontWeight: 700 }}>● Active</span> : formatTime(row.checkOut || row.logoutTime)}
+                </td>
+                <td style={{ padding: "12px 16px", fontSize: 13 }}>
+                  {row.totalHours ? <span style={{ color: C.cyan, fontWeight: 600 }}>{Number(row.totalHours).toFixed(1)}h</span> : "—"}
+                </td>
+                <td style={{ padding: "12px 16px" }}>{statusBadge(row.status)}</td>
+                <td style={{ padding: "12px 16px" }}>{getFlagBadge(row.flags)}</td>
+                <td style={{ padding: "12px 16px" }}>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {isAdmin(user) && (
+                      <button className="btn-icon" style={{ background: C.accentG, color: C.accent }} title="Override"
+                        onClick={() => { setOverrideForm({ userId: row.userId?._id || row.user?._id || row.userId || "", date: row.date?.split("T")[0] || "", status: row.status || "present", checkIn: "", checkOut: "", note: "" }); setOverrideModal(true); }}>
+                        <Edit2 size={12} />
+                      </button>
+                    )}
+                    {!isAdmin(user) && !row.correctionRequest?.status && row.checkOut && (
+                      <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 9px" }}
+                        onClick={() => { setCorrectionTarget(row); setCorrectionModal(true); }}>
+                        Correct
+                      </button>
+                    )}
+                    {row.correctionRequest?.status && (
+                      <Badge label={row.correctionRequest.status.toUpperCase()} color={row.correctionRequest.status === "approved" ? C.green : row.correctionRequest.status === "rejected" ? C.red : C.amber} />
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <Modal open={overrideModal} onClose={()=>setOverrideModal(false)} title="Mark Attendance">
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <FormField label="Employee">
-            <select value={overrideForm.userId} onChange={e=>setOverrideForm(p=>({...p,userId:e.target.value}))} className="inp" style={{background:C.card,color:C.t1}}>
-              <option value="" style={{background:C.card}}>Select employee…</option>
-              {users.map(u=><option key={u._id} value={u._id} style={{background:C.card,color:C.t1}}>{u.name}</option>)}
-            </select>
-          </FormField>
-          <FormField label="Date"><Inp value={overrideForm.date} onChange={e=>setOverrideForm(p=>({...p,date:e.target.value}))} type="date"/></FormField>
+      {/* ── Admin Override Modal ── */}
+      <Modal open={overrideModal} onClose={() => setOverrideModal(false)} title="Mark / Override Attendance">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {isAdmin(user) && (
+            <FormField label="Employee">
+              <select value={overrideForm.userId} onChange={e => setOverrideForm(p => ({ ...p, userId: e.target.value }))} className="inp">
+                <option value="">Select employee…</option>
+                {users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+              </select>
+            </FormField>
+          )}
+          <FormField label="Date"><Inp value={overrideForm.date} onChange={e => setOverrideForm(p => ({ ...p, date: e.target.value }))} type="date" /></FormField>
           <FormField label="Status">
-            <select value={overrideForm.status} onChange={e=>setOverrideForm(p=>({...p,status:e.target.value}))} className="inp" style={{background:C.card,color:C.t1}}>
-              {["present","absent","late","half_day","on_time","early"].map(s=>(
-                <option key={s} value={s} style={{background:C.card,color:C.t1}}>{s.replace("_"," ").toUpperCase()}</option>
-              ))}
+            <select value={overrideForm.status} onChange={e => setOverrideForm(p => ({ ...p, status: e.target.value }))} className="inp">
+              {["present","absent","late","half_day","on leave"].map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </FormField>
-          <FormField label="Note (optional)"><Inp value={overrideForm.note} onChange={e=>setOverrideForm(p=>({...p,note:e.target.value}))} placeholder="Reason…"/></FormField>
-          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-            <button className="btn-ghost" onClick={()=>setOverrideModal(false)}>Cancel</button>
-            <button className="btn-pri" onClick={handleOverride}>Apply</button>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Check In Time (optional)"><Inp value={overrideForm.checkIn} onChange={e => setOverrideForm(p => ({ ...p, checkIn: e.target.value }))} type="datetime-local" /></FormField>
+            <FormField label="Check Out Time (optional)"><Inp value={overrideForm.checkOut} onChange={e => setOverrideForm(p => ({ ...p, checkOut: e.target.value }))} type="datetime-local" /></FormField>
+          </div>
+          <FormField label="Admin Note"><Inp value={overrideForm.note} onChange={e => setOverrideForm(p => ({ ...p, note: e.target.value }))} placeholder="Reason for override…" /></FormField>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button className="btn-ghost" onClick={() => setOverrideModal(false)}>Cancel</button>
+            <button className="btn-pri" onClick={handleOverride}>Apply Override</button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Correction Request Modal (employee) ── */}
+      <Modal open={correctionModal} onClose={() => setCorrectionModal(false)} title="Request Attendance Correction">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {correctionTarget && (
+            <div style={{ background: C.accentG, border: `1px solid ${C.accent}28`, borderRadius: 10, padding: "10px 14px" }}>
+              <p style={{ fontSize: 12, color: C.t2 }}>Requesting correction for: <span style={{ color: C.t1, fontWeight: 600 }}>{correctionTarget.date?.split("T")[0]}</span></p>
+              <p style={{ fontSize: 12, color: C.t2, marginTop: 4 }}>Current: In {formatTime(correctionTarget.checkIn)} — Out {formatTime(correctionTarget.checkOut)} — {correctionTarget.status}</p>
+            </div>
+          )}
+          <FormField label="Reason for Correction *">
+            <textarea className="inp" value={correctionForm.reason} onChange={e => setCorrectionForm(p => ({ ...p, reason: e.target.value }))} placeholder="Explain why you need a correction…" rows={3} style={{ resize: "vertical" }} />
+          </FormField>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Correct Check-in Time"><Inp value={correctionForm.requestedCheckIn} onChange={e => setCorrectionForm(p => ({ ...p, requestedCheckIn: e.target.value }))} type="datetime-local" /></FormField>
+            <FormField label="Correct Check-out Time"><Inp value={correctionForm.requestedCheckOut} onChange={e => setCorrectionForm(p => ({ ...p, requestedCheckOut: e.target.value }))} type="datetime-local" /></FormField>
+          </div>
+          <div style={{ fontSize: 12, color: C.t2, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "8px 12px" }}>
+            Your request will be sent to admin for review. You'll be notified when it's approved or rejected.
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button className="btn-ghost" onClick={() => setCorrectionModal(false)}>Cancel</button>
+            <button className="btn-pri" onClick={handleCorrection}>Submit Request</button>
           </div>
         </div>
       </Modal>
