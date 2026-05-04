@@ -173,11 +173,12 @@ const injectCSS = () => {
       background: ${C.card};
       border: 1px solid ${C.border};
       border-radius: 16px;
-      transition: all 0.25s ease;
+      transition: all 0.2s ease;
     }
     .card:hover {
-      border-color: rgba(99,102,241,0.2);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(99,102,241,0.06);
+      border-color: rgba(99,102,241,0.18);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.08);
+      transform: translateY(-1px);
     }
 
     /* Sidebar nav buttons */
@@ -203,13 +204,14 @@ const injectCSS = () => {
       color: ${C.t1};
     }
     .nav-btn.active {
-      background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.15));
+      background: linear-gradient(135deg, rgba(99,102,241,0.22), rgba(139,92,246,0.12));
       color: #fff;
       font-weight: 600;
-      border: 1px solid rgba(99,102,241,0.25);
-      box-shadow: 0 0 20px rgba(99,102,241,0.1);
+      border: 1px solid rgba(99,102,241,0.3);
+      box-shadow: 0 2px 12px rgba(99,102,241,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
     }
     .nav-btn.active svg { color: ${C.accent}; }
+    .nav-btn:hover:not(.active) { background: rgba(255,255,255,0.05); color: ${C.t1}; transform: translateX(2px); }
     .nav-btn-collapsed {
       width: 40px;
       height: 40px;
@@ -255,8 +257,8 @@ const injectCSS = () => {
     .sidebar-transition { transition: width 0.3s ease, min-width 0.3s ease; }
 
     /* Table rows */
-    .tr { border-bottom: 1px solid ${C.border}; transition: background 0.12s; }
-    .tr:hover { background: rgba(99,102,241,0.03); }
+    .tr { border-bottom: 1px solid ${C.border}; transition: all 0.12s; }
+    .tr:hover { background: rgba(99,102,241,0.05); }
     .tr:last-child { border-bottom: none; }
 
     /* Inputs */
@@ -273,9 +275,10 @@ const injectCSS = () => {
     }
     .inp:focus {
       border-color: ${C.accent};
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
       background: rgba(99,102,241,0.04);
     }
+    .inp:hover:not(:focus) { border-color: rgba(255,255,255,0.14); }
     .inp::placeholder { color: ${C.t3}; }
 
     /* Buttons */
@@ -284,10 +287,14 @@ const injectCSS = () => {
       padding: 9px 18px; border-radius: 10px; border: none; cursor: pointer;
       font-size: 13px; font-weight: 600; color: #fff;
       background: linear-gradient(135deg, ${C.accent}, ${C.accentD});
-      box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+      box-shadow: 0 4px 16px rgba(99,102,241,0.3);
       transition: all 0.18s;
+      position: relative; overflow: hidden;
     }
-    .btn-pri:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.45); filter: brightness(1.08); }
+    .btn-pri::after { content:""; position:absolute; inset:0; background:rgba(255,255,255,0); transition:background 0.18s; }
+    .btn-pri:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(99,102,241,0.5); }
+    .btn-pri:hover::after { background:rgba(255,255,255,0.06); }
+    .btn-pri:active { transform: translateY(0); }
     .btn-pri:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
     .btn-ghost {
       display: inline-flex; align-items: center; gap: 6px;
@@ -514,11 +521,11 @@ function Inp({ value, onChange, placeholder, type = "text", icon: Icon, style: e
 
 function PageShell({ title, sub, actions, children }) {
   return (
-    <div className="scroll" style={{ padding: "28px" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 16 }}>
+    <div className="scroll" style={{ padding: "24px 28px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 16, paddingBottom: 20, borderBottom: `1px solid ${C.border}` }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.t1, letterSpacing: "-.02em" }}>{title}</h1>
-          {sub && <p style={{ fontSize: 13, color: C.t2, marginTop: 4 }}>{sub}</p>}
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.t1, letterSpacing: "-.02em", display: "flex", alignItems: "center", gap: 10 }}>{title}</h1>
+          {sub && <p style={{ fontSize: 13, color: C.t2, marginTop: 5 }}>{sub}</p>}
         </div>
         {actions && <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0, flexWrap: "wrap" }}>{actions}</div>}
       </div>
@@ -623,7 +630,7 @@ function Sidebar({ active, setActive, onLogout, user, collapsed, setCollapsed })
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        background: "rgba(8,10,20,0.98)",
+        background: "linear-gradient(180deg, #090b12 0%, #0b0d18 100%)",
         borderRight: `1px solid ${C.border}`,
         position: "relative",
         flexShrink: 0,
@@ -988,7 +995,7 @@ function GlobalSearch({ onNavigate, user }) {
 }
 
 // ─── TOP BAR ──────────────────────────────────────────────────────────────────
-function TopBar({ clock, user, onNavigate }) {
+function TopBar({ clock, user, onNavigate, onToggleSidebar }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifs, setNotifs] = useState([]);
 
@@ -1009,7 +1016,15 @@ function TopBar({ clock, user, onNavigate }) {
       borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(20px)",
       flexShrink: 0, gap: 16,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+        <button
+          onClick={onToggleSidebar}
+          className="icon-btn"
+          title="Toggle sidebar"
+          style={{ flexShrink: 0 }}
+        >
+          <Menu size={16} />
+        </button>
         <GlobalSearch onNavigate={onNavigate} user={user} />
       </div>
 
@@ -2063,12 +2078,7 @@ function EmployeesPage({ addToast, user, globalSearch }) {
         {/* Pagination hint */}
         {filtered.length > 0 && (
           <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 12, color: C.t3 }}>Showing 1 to {Math.min(filtered.length, 8)} of {filtered.length} results</span>
-            <div style={{ display: "flex", gap: 4 }}>
-              {[1,2,3,"...",42,43].map((p, i) => (
-                <button key={i} style={{ width: 28, height: 28, borderRadius: 7, border: `1px solid ${p===1 ? C.accent : C.border}`, background: p===1 ? C.accentG : "transparent", color: p===1 ? C.accent : C.t2, fontSize: 12, cursor: "pointer", fontWeight: p===1 ? 700 : 400 }}>{p}</button>
-              ))}
-            </div>
+            <span style={{ fontSize: 12, color: C.t3 }}>Showing {filtered.length} employee{filtered.length !== 1 ? "s" : ""}</span>
           </div>
         )}
       </div>
@@ -2148,15 +2158,25 @@ function AttendancePage({ addToast, user }) {
           apiFetch("/users").then(r => r.json()),
           apiFetch("/company").then(r => r.json()),
         ]);
-        setRecords(safeArr(aR.value, "attendance", "records", "data"));
+        // normalize: backend returns user field, frontend expects userId
+        const recs = safeArr(aR.value, "attendance", "records", "data").map(r => ({
+          ...r,
+          userId: r.userId || r.user,
+          hoursWorked: r.hoursWorked ?? r.totalHours ?? 0,
+        }));
+        setRecords(recs);
         setUsers(safeArr(uR.value, "users", "data"));
         setSettings(sR.value?.company || sR.value);
       } else {
         const [aR, sR] = await Promise.allSettled([
-          apiFetch(tab === "monthly" ? `/attendance/monthly?month=${month}&year=${year}` : "/attendance/today").then(r => r.json()),
+          apiFetch(tab === "monthly" ? `/attendance/monthly?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
           apiFetch("/company").then(r => r.json()),
         ]);
-        const recs = safeArr(aR.value, "attendance", "records", "data");
+        const recs = safeArr(aR.value, "attendance", "records", "data").map(r => ({
+          ...r,
+          userId: r.userId || r.user,
+          hoursWorked: r.hoursWorked ?? r.totalHours ?? 0,
+        }));
         setRecords(recs);
         setSettings(sR.value?.company || sR.value);
         const today = new Date().toDateString();
@@ -2190,13 +2210,13 @@ function AttendancePage({ addToast, user }) {
 
   const handleOverride = async () => {
     try {
-      const r = await apiFetch("/attendance/admin-override", { method: "PUT", body: JSON.stringify(overrideForm) });
+      const r = await apiFetch("/attendance/admin-override", { method: "POST", body: JSON.stringify(overrideForm) });
       if (!r.ok) throw new Error();
-      addToast("Attendance overridden", "success"); setOverrideModal(false); load();
+      addToast("Attendance updated", "success"); setOverrideModal(false); load();
     } catch { addToast("Failed to override", "error"); }
   };
 
-  const filtered = records.filter(r => { if (!search) return true; const name = r.userId?.name || r.employeeName || ""; return name.toLowerCase().includes(search.toLowerCase()); });
+  const filtered = records.filter(r => { if (!search) return true; const name = r.userId?.name || r.user?.name || ""; return name.toLowerCase().includes(search.toLowerCase()); });
   const present  = filtered.filter(r => ["present","on_time","early"].includes(r.status?.toLowerCase())).length;
   const absent   = filtered.filter(r => r.status?.toLowerCase() === "absent").length;
   const late     = filtered.filter(r => r.status?.toLowerCase() === "late").length;
@@ -2283,7 +2303,7 @@ function AttendancePage({ addToast, user }) {
                 <div key={day} style={{ background: isToday ? C.accentG : "rgba(255,255,255,0.02)", border: `1px solid ${isToday ? C.accent + "44" : C.border}`, borderRadius: 10, padding: "8px 6px", minHeight: 56, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? C.accent : C.t2 }}>{day}</span>
                   <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
-                    {recs.slice(0, 4).map((r, ri) => <div key={ri} title={`${r.userId?.name||"Employee"}: ${r.status}`} style={{ width: 7, height: 7, borderRadius: "50%", background: getDotColor(r.status) }} />)}
+                    {recs.slice(0, 4).map((r, ri) => <div key={ri} title={`${r.user?.name || r.userId?.name || "Employee"}: ${r.status}`} style={{ width: 7, height: 7, borderRadius: "50%", background: getDotColor(r.status) }} />)}
                   </div>
                 </div>
               );
@@ -2311,20 +2331,20 @@ function AttendancePage({ addToast, user }) {
                 <td style={{ padding: "12px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                     <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.accent, flexShrink: 0 }}>
-                      {(row.userId?.name || row.employeeName || user?.name || "?")[0]?.toUpperCase()}
+                      {(row.userId?.name || row.user?.name || "?")[0]?.toUpperCase()}
                     </div>
                     <div>
-                      <p style={{ fontWeight: 600, fontSize: 13 }}>{row.userId?.name || row.employeeName || user?.name || "—"}</p>
-                      {row.userId?.department && <p style={{ fontSize: 11, color: C.t2 }}>{row.userId.department}</p>}
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>{row.userId?.name || row.user?.name || "—"}</p>
+                      {(row.userId?.department || row.user?.department) && <p style={{ fontSize: 11, color: C.t2 }}>{row.userId?.department || row.user?.department}</p>}
                     </div>
                   </div>
                 </td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{formatDate(row.date)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.green, fontWeight: 500 }}>{formatTime(row.checkIn || row.loginTime)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.red, fontWeight: 500 }}>{formatTime(row.checkOut || row.logoutTime)}</td>
-                <td style={{ padding: "12px 16px", fontSize: 13 }}>{row.hoursWorked ? <span style={{ color: C.cyan, fontWeight: 600 }}>{Number(row.hoursWorked).toFixed(1)}h</span> : "—"}</td>
+                <td style={{ padding: "12px 16px", fontSize: 13 }}>{(row.totalHours || row.hoursWorked) ? <span style={{ color: C.cyan, fontWeight: 600 }}>{Number(row.totalHours || row.hoursWorked).toFixed(1)}h</span> : "—"}</td>
                 <td style={{ padding: "12px 16px" }}>{statusBadge(row.status)}</td>
-                {isAdmin(user) && <td style={{ padding: "12px 16px" }}><button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => { setOverrideForm({ userId: row.userId?._id || row.userId || "", date: row.date?.split("T")[0] || "", status: row.status || "present", note: "" }); setOverrideModal(true); }}><Edit2 size={12} /></button></td>}
+                {isAdmin(user) && <td style={{ padding: "12px 16px" }}><button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => { setOverrideForm({ userId: row.user?._id || row.userId?._id || row.userId || "", date: row.date?.split("T")[0] || new Date().toISOString().split("T")[0], status: row.status || "present", note: "" }); setOverrideModal(true); }}><Edit2 size={12} /></button></td>}
               </tr>
             ))}
           </tbody>
@@ -2672,8 +2692,8 @@ function LeavesPage({ addToast, user }) {
                 <tr key={row._id || i} className="tr">
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.accent }}>{(row.userId?.name || user?.name || "?")[0]?.toUpperCase()}</div>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{row.userId?.name || user?.name || "—"}</span>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.accent }}>{(row.user?.name || row.userId?.name || user?.name || "?")[0]?.toUpperCase()}</div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{row.user?.name || row.userId?.name || user?.name || "—"}</span>
                     </div>
                   </td>
                   <td style={{ padding: "12px 16px" }}><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: typeColor(row.type) + "22", color: typeColor(row.type), textTransform: "capitalize" }}>{row.type || "casual"}</span></td>
@@ -2872,11 +2892,22 @@ function SalaryPage({ addToast, user }) {
     setSaving(true);
     try {
       const net = Number(form.basicSalary) + Number(form.allowances || 0) - Number(form.deductions || 0);
-      const r = await apiFetch("/salaries", { method: "POST", body: JSON.stringify({ ...form, netSalary: net }) });
-      if (!r.ok) throw new Error();
+      const month = `${form.year}-${String(form.month).padStart(2, "0")}`;
+      const r = await apiFetch("/salaries", { method: "POST", body: JSON.stringify({
+        user: form.userId, // backend expects 'user' not 'userId'
+        basicSalary: Number(form.basicSalary),
+        allowances: Number(form.allowances || 0),
+        deductions: Number(form.deductions || 0),
+        netSalary: net,
+        amount: net, // old salary model uses 'amount'
+        month,
+        notes: form.notes,
+        status: "pending",
+      }) });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.message); }
       addToast("Salary record created!", "success"); setModal(false);
       setForm({ userId: "", basicSalary: "", allowances: "", deductions: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(), notes: "" }); load();
-    } catch { addToast("Failed", "error"); }
+    } catch (e) { addToast(e.message || "Failed to create salary record", "error"); }
     setSaving(false);
   };
 
@@ -3150,79 +3181,126 @@ function BuyersPage({ addToast }) {
 
 // ─── ORDERS ───────────────────────────────────────────────────────────────────
 function OrdersPage({ addToast }) {
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders]   = useState([]);
+  const [buyers, setBuyers]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ buyerName: "", product: "", quantity: "", amount: "", status: "pending", date: new Date().toISOString().split("T")[0] });
-  const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
+  const [modal, setModal]     = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm] = useState({ buyer: "", product: "", quantity: "", price: "", unit: "KG", hsnCode: "", status: "draft", paymentStatus: "pending", notes: "" });
+  const [saving, setSaving]   = useState(false);
+  const [search, setSearch]   = useState("");
 
   const load = async () => {
     setLoading(true);
-    try { const r = await apiFetch("/orders"); const d = await r.json(); setOrders(safeArr(d, "orders", "data")); }
-    catch { addToast("Failed", "error"); }
+    try {
+      const [oR, bR] = await Promise.allSettled([
+        apiFetch("/orders").then(r => r.json()),
+        apiFetch("/buyers").then(r => r.json()),
+      ]);
+      setOrders(safeArr(oR.value, "orders", "data"));
+      setBuyers(safeArr(bR.value, "buyers", "data"));
+    } catch { addToast("Failed to load orders", "error"); }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
+  const openAdd  = () => { setEditTarget(null); setForm({ buyer: "", product: "", quantity: "", price: "", unit: "KG", hsnCode: "", status: "draft", paymentStatus: "pending", notes: "" }); setModal(true); };
+  const openEdit = (o) => { setEditTarget(o); setForm({ buyer: o.buyer?._id || o.buyer || "", product: o.product || "", quantity: o.quantity || "", price: o.price || "", unit: o.unit || "KG", hsnCode: o.hsnCode || "", status: o.status || "draft", paymentStatus: o.paymentStatus || "pending", notes: o.notes || "" }); setModal(true); };
+
   const handleSave = async () => {
-    if (!form.buyerName || !form.product) return addToast("Buyer and product required", "error");
+    if (!form.buyer || !form.product || !form.quantity || !form.price) return addToast("Buyer, product, quantity and price required", "error");
     setSaving(true);
     try {
-      const r = await apiFetch("/orders", { method: "POST", body: JSON.stringify(form) });
-      if (!r.ok) throw new Error();
-      addToast("Order created!", "success"); setModal(false);
-      setForm({ buyerName: "", product: "", quantity: "", amount: "", status: "pending", date: new Date().toISOString().split("T")[0] }); load();
-    } catch { addToast("Failed", "error"); }
+      const method = editTarget ? "PUT" : "POST";
+      const path   = editTarget ? `/orders/${editTarget._id}` : "/orders";
+      const r = await apiFetch(path, { method, body: JSON.stringify({ ...form, quantity: Number(form.quantity), price: Number(form.price) }) });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.message); }
+      addToast(editTarget ? "Order updated!" : "Order created!", "success"); setModal(false); load();
+    } catch (e) { addToast(e.message || "Failed", "error"); }
     setSaving(false);
   };
 
   const updateStatus = async (id, status) => {
-    try { await apiFetch(`/orders/${id}`, { method: "PUT", body: JSON.stringify({ status }) }); addToast("Updated", "success"); load(); }
+    try { await apiFetch(`/orders/${id}`, { method: "PUT", body: JSON.stringify({ status }) }); addToast("Status updated", "success"); load(); }
     catch { addToast("Failed", "error"); }
   };
 
   const handleDelete = async (id) => {
+    if (!confirm("Delete this order?")) return;
     try { await apiFetch(`/orders/${id}`, { method: "DELETE" }); addToast("Order deleted", "success"); load(); }
     catch { addToast("Failed", "error"); }
   };
 
-  const filtered = orders.filter(o => !search || [o.buyerName, o.product].some(f => f?.toLowerCase().includes(search.toLowerCase())));
-  const totalRevenue = orders.filter(o => o.status === "completed").reduce((sum, o) => sum + Number(o.amount || 0), 0);
+  const filtered = orders.filter(o => !search || [o.buyer?.name, o.product, o.orderNumber, o.hsnCode].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+  const totalRevenue = orders.filter(o => o.status === "delivered").reduce((s, o) => s + Number(o.totalValue || (o.quantity * o.price) || 0), 0);
+
+  const statusColor = s => ({ draft: C.t2, confirmed: C.blue, shipped: C.amber, delivered: C.green, cancelled: C.red }[s] || C.t2);
+  const payColor    = s => ({ pending: C.amber, partial: C.blue, paid: C.green, overdue: C.red }[s] || C.t2);
 
   return (
-    <PageShell title="Orders" sub={`Total revenue: ₹${totalRevenue.toLocaleString("en-IN")}`}
-      actions={<><Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" icon={Search} style={{ width: 220 }} /><button className="btn-pri" onClick={() => setModal(true)}><Plus size={14} />New Order</button></>}
+    <PageShell title="Orders" sub={`${orders.length} orders · Revenue: ₹${totalRevenue.toLocaleString("en-IN")}`}
+      actions={<><Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search orders…" icon={Search} style={{ width: 220 }} /><button className="btn-pri" onClick={openAdd}><Plus size={14} />New Order</button></>}
     >
       <Table loading={loading} columns={[
-        { key: "buyerName", label: "Buyer",    render: v => <span style={{ fontWeight: 600 }}>{v || "—"}</span> },
-        { key: "product",   label: "Product",  render: v => <span style={{ color: C.t2 }}>{v || "—"}</span> },
-        { key: "quantity",  label: "Qty",      render: v => <span style={{ color: C.t2 }}>{v || "—"}</span> },
-        { key: "amount",    label: "Amount",   render: v => <span style={{ color: C.accent, fontWeight: 700 }}>₹{Number(v||0).toLocaleString("en-IN")}</span> },
-        { key: "date",      label: "Date",     render: v => <span style={{ color: C.t2 }}>{v ? new Date(v).toLocaleDateString("en-IN") : "—"}</span> },
-        { key: "status",    label: "Status",   render: v => statusBadge(v || "pending") },
+        { key: "orderNumber", label: "Order #",  render: v => <span style={{ color: C.accent, fontWeight: 700, fontFamily: "monospace" }}>{v || "—"}</span> },
+        { key: "buyer",       label: "Buyer",    render: v => <span style={{ fontWeight: 600 }}>{v?.name || "—"}</span> },
+        { key: "product",     label: "Product",  render: (v, row) => <div><p style={{ fontWeight: 600 }}>{v}</p>{row.hsnCode && <p style={{ fontSize: 11, color: C.t3 }}>HSN: {row.hsnCode}</p>}</div> },
+        { key: "quantity",    label: "Qty",      render: (v, row) => <span style={{ color: C.t2 }}>{v} {row.unit || "KG"}</span> },
+        { key: "price",       label: "Unit Price", render: v => <span style={{ color: C.t2 }}>₹{Number(v||0).toLocaleString("en-IN")}</span> },
+        { key: "totalValue",  label: "Total",    render: (v, row) => <span style={{ color: C.accent, fontWeight: 700 }}>₹{Number(v || (row.quantity * row.price) || 0).toLocaleString("en-IN")}</span> },
+        { key: "status",      label: "Status",   render: v => <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: statusColor(v) + "22", color: statusColor(v), textTransform: "capitalize" }}>{v || "draft"}</span> },
+        { key: "paymentStatus", label: "Payment", render: v => <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: payColor(v) + "22", color: payColor(v), textTransform: "capitalize" }}>{v || "pending"}</span> },
         { key: "_id", label: "Actions", render: (v, row) => (
-          <div style={{ display: "flex", gap: 6 }}>
-            {row.status !== "completed" && <button style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, background: C.greenG, color: C.green, border: "none", cursor: "pointer", fontWeight: 600 }} onClick={() => updateStatus(row._id, "completed")}>Complete</button>}
+          <div style={{ display: "flex", gap: 5 }}>
+            <button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => openEdit(row)}><Edit2 size={12} /></button>
             <button className="btn-icon" style={{ background: C.redG, color: C.red }} onClick={() => handleDelete(row._id)}><Trash2 size={12} /></button>
           </div>
         )},
-      ]} rows={filtered} emptyText="No orders" />
+      ]} rows={filtered} emptyText="No orders found" />
 
-      <Modal open={modal} onClose={() => setModal(false)} title="Create Order">
+      <Modal open={modal} onClose={() => setModal(false)} title={editTarget ? "Edit Order" : "New Order"} width={580}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {[{ key:"buyerName",label:"Buyer Name",ph:"Buyer name" },{ key:"product",label:"Product",ph:"Product name" },{ key:"quantity",label:"Quantity",ph:"100",type:"number" },{ key:"amount",label:"Amount (₹)",ph:"50000",type:"number" }].map(f => (
-            <FormField key={f.key} label={f.label}><Inp value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.ph} type={f.type} /></FormField>
-          ))}
-          <FormField label="Date"><Inp value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} type="date" /></FormField>
-          <FormField label="Status">
-            <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} className="inp">
-              <option value="pending">Pending</option><option value="processing">Processing</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
+          <FormField label="Buyer">
+            <select value={form.buyer} onChange={e => setForm(p => ({ ...p, buyer: e.target.value }))} className="inp">
+              <option value="">Select buyer…</option>
+              {buyers.map(b => <option key={b._id} value={b._id}>{b.name} {b.company ? `— ${b.company}` : ""}</option>)}
             </select>
           </FormField>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Product"><Inp value={form.product} onChange={e => setForm(p => ({ ...p, product: e.target.value }))} placeholder="e.g. Basmati Rice" /></FormField>
+            <FormField label="HSN Code"><Inp value={form.hsnCode} onChange={e => setForm(p => ({ ...p, hsnCode: e.target.value }))} placeholder="e.g. 1006" /></FormField>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <FormField label="Quantity"><Inp value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} placeholder="100" type="number" /></FormField>
+            <FormField label="Unit">
+              <select value={form.unit} onChange={e => setForm(p => ({ ...p, unit: e.target.value }))} className="inp">
+                {["KG","MT","LT","PCS","BOX","BAG","TON"].map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Unit Price (₹)"><Inp value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="500" type="number" /></FormField>
+          </div>
+          {form.quantity && form.price && (
+            <div style={{ background: C.accentG, border: `1px solid ${C.accent}28`, borderRadius: 10, padding: "10px 14px" }}>
+              <p style={{ fontSize: 12, color: C.t2 }}>Total Value</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: C.accent }}>₹{(Number(form.quantity) * Number(form.price)).toLocaleString("en-IN")}</p>
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Order Status">
+              <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} className="inp">
+                {["draft","confirmed","shipped","delivered","cancelled"].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Payment Status">
+              <select value={form.paymentStatus} onChange={e => setForm(p => ({ ...p, paymentStatus: e.target.value }))} className="inp">
+                {["pending","partial","paid","overdue"].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Notes"><textarea className="inp" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Additional notes…" rows={2} style={{ resize: "vertical" }} /></FormField>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button className="btn-ghost" onClick={() => setModal(false)}>Cancel</button>
-            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Create Order"}</button>
+            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : editTarget ? "Update Order" : "Create Order"}</button>
           </div>
         </div>
       </Modal>
@@ -3360,9 +3438,16 @@ function AnalyticsPage({ addToast, user }) {
 // ─── COMPANY SETTINGS ─────────────────────────────────────────────────────────
 function CompanyPage({ addToast, user }) {
   const [settings, setSettings] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ companyName: "", sessionStartTime: "", sessionEndTime: "", gracePeriod: "", sessionTimeoutHours: "" });
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [form, setForm] = useState({
+    companyName: "", sessionStartTime: "", sessionEndTime: "",
+    gracePeriod: "", sessionTimeoutHours: "",
+    officeStartHour: "9", officeStartMinute: "0",
+    officeEndHour: "18", officeEndMinute: "0",
+    gracePeriodMinutes: "15", minWorkingHours: "7",
+    halfDayHours: "4", autoEndHour: "23", autoEndMinute: "59",
+  });
 
   useEffect(() => {
     (async () => {
@@ -3371,7 +3456,22 @@ function CompanyPage({ addToast, user }) {
         const r = await apiFetch("/company"); const d = await r.json();
         const s = d?.company || d;
         setSettings(s);
-        setForm({ companyName: s?.companyName || "", sessionStartTime: s?.sessionStartTime || "", sessionEndTime: s?.sessionEndTime || "", gracePeriod: s?.gracePeriod || "", sessionTimeoutHours: s?.sessionTimeoutHours || "" });
+        setForm({
+          companyName:        s?.companyName || s?.name || "",
+          sessionStartTime:   s?.sessionStartTime || "",
+          sessionEndTime:     s?.sessionEndTime || "",
+          gracePeriod:        s?.gracePeriod || "",
+          sessionTimeoutHours: s?.sessionTimeoutHours || "",
+          officeStartHour:    String(s?.officeStartHour ?? 9),
+          officeStartMinute:  String(s?.officeStartMinute ?? 0),
+          officeEndHour:      String(s?.officeEndHour ?? 18),
+          officeEndMinute:    String(s?.officeEndMinute ?? 0),
+          gracePeriodMinutes: String(s?.gracePeriodMinutes ?? 15),
+          minWorkingHours:    String(s?.minWorkingHours ?? 7),
+          halfDayHours:       String(s?.halfDayHours ?? 4),
+          autoEndHour:        String(s?.autoEndHour ?? 23),
+          autoEndMinute:      String(s?.autoEndMinute ?? 59),
+        });
       } catch { addToast("Failed to load settings", "error"); }
       setLoading(false);
     })();
@@ -3380,37 +3480,120 @@ function CompanyPage({ addToast, user }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const r = await apiFetch("/company", { method: "PUT", body: JSON.stringify(form) });
+      const payload = {
+        ...form,
+        name: form.companyName,
+        officeStartHour:    Number(form.officeStartHour),
+        officeStartMinute:  Number(form.officeStartMinute),
+        officeEndHour:      Number(form.officeEndHour),
+        officeEndMinute:    Number(form.officeEndMinute),
+        gracePeriodMinutes: Number(form.gracePeriodMinutes),
+        minWorkingHours:    Number(form.minWorkingHours),
+        halfDayHours:       Number(form.halfDayHours),
+        autoEndHour:        Number(form.autoEndHour),
+        autoEndMinute:      Number(form.autoEndMinute),
+      };
+      const r = await apiFetch("/company", { method: "PUT", body: JSON.stringify(payload) });
       if (!r.ok) throw new Error();
       addToast("Settings saved!", "success");
     } catch { addToast("Failed to save", "error"); }
     setSaving(false);
   };
 
-  if (!isAdmin(user)) return <PageShell title="Settings" sub="Company configuration"><div style={{ textAlign: "center", padding: "60px 0", color: C.t2 }}>Admin access required</div></PageShell>;
+  if (!isAdmin(user)) return <PageShell title="Settings" sub="Company configuration"><div style={{ textAlign:"center", padding:"60px 0", color:C.t2 }}>Admin access required</div></PageShell>;
+
+  const F = ({ label, children }) => <FormField label={label}>{children}</FormField>;
 
   return (
-    <PageShell title="Company Settings" sub="Configure your organization">
-      <div style={{ maxWidth: 640 }}>
+    <PageShell title="Company Settings" sub="Configure your organization and attendance rules">
+      <div style={{ maxWidth: 700 }}>
+        {/* General */}
         <div className="card" style={{ padding: 24, marginBottom: 16 }}>
           <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 18 }}>General</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <FormField label="Company Name"><Inp value={form.companyName} onChange={e => setForm(p => ({ ...p, companyName: e.target.value }))} placeholder="Nexus Enterprises…" /></FormField>
-          </div>
+          <F label="Company Name"><Inp value={form.companyName} onChange={e => setForm(p => ({ ...p, companyName: e.target.value }))} placeholder="Nexus Enterprises…" /></F>
         </div>
+
+        {/* Attendance Session Settings */}
         <div className="card" style={{ padding: 24, marginBottom: 16 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 18 }}>Attendance Settings</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Session Start"><Inp value={form.sessionStartTime} onChange={e => setForm(p => ({ ...p, sessionStartTime: e.target.value }))} placeholder="09:00" /></FormField>
-              <FormField label="Session End"><Inp value={form.sessionEndTime} onChange={e => setForm(p => ({ ...p, sessionEndTime: e.target.value }))} placeholder="18:00" /></FormField>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 4 }}>Attendance Session Rules</h2>
+          <p style={{ fontSize: 12, color: C.t2, marginBottom: 18 }}>These rules control how employee attendance is tracked and auto-calculated.</p>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.t2, display: "block", marginBottom: 6 }}>Session Start Time</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select value={form.officeStartHour} onChange={e => setForm(p => ({ ...p, officeStartHour: e.target.value }))} className="inp" style={{ flex: 1 }}>
+                  {Array.from({length:24},(_,i)=><option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
+                </select>
+                <span style={{ color: C.t2, alignSelf: "center", fontWeight: 700 }}>:</span>
+                <select value={form.officeStartMinute} onChange={e => setForm(p => ({ ...p, officeStartMinute: e.target.value }))} className="inp" style={{ flex: 1 }}>
+                  {[0,15,30,45].map(m=><option key={m} value={m}>{String(m).padStart(2,'0')}</option>)}
+                </select>
+              </div>
             </div>
-            <FormField label="Grace Period (minutes)"><Inp value={form.gracePeriod} onChange={e => setForm(p => ({ ...p, gracePeriod: e.target.value }))} placeholder="15" type="number" /></FormField>
-            <FormField label="Session Timeout (hours)"><Inp value={form.sessionTimeoutHours} onChange={e => setForm(p => ({ ...p, sessionTimeoutHours: e.target.value }))} placeholder="8" type="number" /></FormField>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: C.t2, display: "block", marginBottom: 6 }}>Session End Time</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <select value={form.officeEndHour} onChange={e => setForm(p => ({ ...p, officeEndHour: e.target.value }))} className="inp" style={{ flex: 1 }}>
+                  {Array.from({length:24},(_,i)=><option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
+                </select>
+                <span style={{ color: C.t2, alignSelf: "center", fontWeight: 700 }}>:</span>
+                <select value={form.officeEndMinute} onChange={e => setForm(p => ({ ...p, officeEndMinute: e.target.value }))} className="inp" style={{ flex: 1 }}>
+                  {[0,15,30,45].map(m=><option key={m} value={m}>{String(m).padStart(2,'0')}</option>)}
+                </select>
+              </div>
+            </div>
+            <F label="Grace Period (minutes)">
+              <Inp value={form.gracePeriodMinutes} onChange={e => setForm(p => ({ ...p, gracePeriodMinutes: e.target.value }))} placeholder="15" type="number" />
+            </F>
+            <F label="Minimum Work Hours (for Present)">
+              <Inp value={form.minWorkingHours} onChange={e => setForm(p => ({ ...p, minWorkingHours: e.target.value }))} placeholder="7" type="number" />
+            </F>
+            <F label="Half Day Threshold (hours)">
+              <Inp value={form.halfDayHours} onChange={e => setForm(p => ({ ...p, halfDayHours: e.target.value }))} placeholder="4" type="number" />
+            </F>
+            <F label="Session Timeout (hours)">
+              <Inp value={form.sessionTimeoutHours} onChange={e => setForm(p => ({ ...p, sessionTimeoutHours: e.target.value }))} placeholder="8" type="number" />
+            </F>
+          </div>
+
+          {/* Auto End Session */}
+          <div style={{ marginTop: 16, padding: "14px 16px", background: C.amberG, border: `1px solid ${C.amber}28`, borderRadius: 10 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginBottom: 10 }}>⏰ Auto End Session Time</p>
+            <p style={{ fontSize: 12, color: C.t2, marginBottom: 10 }}>If an employee forgets to check out, their session will be force-ended at this time.</p>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select value={form.autoEndHour} onChange={e => setForm(p => ({ ...p, autoEndHour: e.target.value }))} className="inp" style={{ width: 90 }}>
+                {Array.from({length:24},(_,i)=><option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
+              </select>
+              <span style={{ color: C.t2, fontWeight: 700 }}>:</span>
+              <select value={form.autoEndMinute} onChange={e => setForm(p => ({ ...p, autoEndMinute: e.target.value }))} className="inp" style={{ width: 90 }}>
+                {[0,15,30,45].map(m=><option key={m} value={m}>{String(m).padStart(2,'0')}</option>)}
+              </select>
+              <span style={{ fontSize: 12, color: C.t2 }}>— sessions auto-close at this time</span>
+            </div>
+          </div>
+
+          {/* Status Logic Summary */}
+          <div style={{ marginTop: 14, padding: "14px 16px", background: C.accentG, border: `1px solid ${C.accent}28`, borderRadius: 10 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginBottom: 8 }}>Auto Status Calculation Logic</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {[
+                { c: C.green,  l: "✅ PRESENT",  r: `Hours ≥ ${form.minWorkingHours}h AND checked in within grace period` },
+                { c: C.amber,  l: "🟡 LATE",     r: `Checked in after grace period but within session window` },
+                { c: C.blue,   l: "🟠 HALF DAY", r: `Hours ≥ ${form.halfDayHours}h but < ${form.minWorkingHours}h` },
+                { c: C.red,    l: "🔴 ABSENT",   r: `No check-in OR hours < ${form.halfDayHours}h` },
+              ].map(x => (
+                <div key={x.l} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: x.c, minWidth: 100 }}>{x.l}</span>
+                  <span style={{ fontSize: 12, color: C.t2 }}>{x.r}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-        <button className="btn-pri" onClick={handleSave} disabled={saving || loading} style={{ padding: "10px 24px" }}>
-          {saving ? "Saving…" : "Save Settings"}
+
+        <button className="btn-pri" onClick={handleSave} disabled={saving || loading} style={{ padding: "10px 28px" }}>
+          {saving ? "Saving…" : "Save All Settings"}
         </button>
       </div>
     </PageShell>
@@ -4790,9 +4973,9 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: C.bg }}>
-      <Sidebar active={activePage} setActive={setActivePage} onLogout={handleLogout} user={user} collapsed={collapsed} setCollapsed={setCollapsed} />
+      <Sidebar active={activePage} setActive={p => { setActivePage(p); if (window.innerWidth < 768) setCollapsed(true); }} onLogout={handleLogout} user={user} collapsed={collapsed} setCollapsed={setCollapsed} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        <TopBar clock={clock} user={user} onNavigate={setActivePage} />
+        <TopBar clock={clock} user={user} onNavigate={setActivePage} onToggleSidebar={() => setCollapsed(p => !p)} />
         <div style={{ flex: 1, overflow: "hidden" }}>
           {currentPage}
         </div>
