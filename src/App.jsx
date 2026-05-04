@@ -111,22 +111,19 @@ const ADMIN_NAV = [
 const EMP_NAV = [
   { section: "MAIN", items: [
     { id:"dashboard",     label:"Dashboard",           icon: LayoutDashboard },
-    { id:"attendance",    label:"My Attendance",       icon: CalendarCheck },
-    { id:"leaves",        label:"My Leaves",           icon: FileText },
-    { id:"worklogs",      label:"My Work Logs",        icon: ClipboardList },
+    { id:"profile",       label:"My Profile",          icon: UserCircle },
+    { id:"attendance",    label:"Attendance",          icon: CalendarCheck },
+    { id:"worklogs",      label:"Worklogs",            icon: ClipboardList },
+    { id:"tasks",         label:"Tasks",               icon: ListTodo },
+    { id:"leaves",        label:"Leave Requests",      icon: FileText },
+    { id:"salary",        label:"My Payslip",          icon: Wallet },
+    { id:"notifications", label:"Notifications",       icon: Bell },
   ]},
-  { section: "WORK", items: [
-    { id:"tasks",         label:"My Tasks",            icon: ListTodo },
-    { id:"timesheet",     label:"My Timesheet",        icon: Activity },
-    { id:"projects",      label:"Projects",            icon: Briefcase },
+  { section: "COMMUNICATION", items: [
+    { id:"chat",          label:"Chat",                icon: MessageSquare },
   ]},
-  { section: "PERSONAL", items: [
-    { id:"salary",        label:"My Salary",           icon: Wallet },
-    { id:"expenses",      label:"My Expenses",         icon: DollarSign },
-    { id:"announcements", label:"Announcements",       icon: Bell },
-    { id:"chat",          label:"Messages",            icon: MessageSquare },
-    { id:"profile",       label:"Profile",             icon: UserCircle },
-    { id:"tools",         label:"Tools",               icon: Wrench },
+  { section: "TOOLS", items: [
+    { id:"tools",         label:"Tools Hub",           icon: Wrench },
   ]},
 ];
 
@@ -723,7 +720,7 @@ function Sidebar({ active, setActive, onLogout, user, collapsed, setCollapsed })
         )}
         {/* Collapse button */}
         <button
-          onClick={() => setCollapsed(p => !p)}
+          onClick={() => setCollapsed(p => { const next = !p; localStorage.setItem("nx_sidebar", next ? "1" : "0"); return next; })}
           style={{
             width: "100%", padding: "12px", display: "flex", alignItems: "center",
             justifyContent: collapsed ? "center" : "flex-start",
@@ -1093,178 +1090,491 @@ function TopBar({ clock, user, onNavigate, onToggleSidebar }) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function DashboardPage({ addToast, user, setPage }) {
-  const [loading, setLoading] = useState(true);
-  const [users, setUsers]     = useState([]);
-  const [salaries, setSalaries] = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [users, setUsers]           = useState([]);
+  const [salaries, setSalaries]     = useState([]);
   const [attendance, setAttendance] = useState([]);
-  const [tasks, setTasks]     = useState([]);
-  const [leaves, setLeaves]   = useState([]);
+  const [tasks, setTasks]           = useState([]);
+  const [leaves, setLeaves]         = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [holidays, setHolidays]     = useState([]);
+  const [auditLogs, setAuditLogs]   = useState([]);
+  // Employee session state
+  const [todayRec, setTodayRec]     = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [liveTime, setLiveTime]     = useState(new Date());
+  const [elapsed, setElapsed]       = useState(0);
 
+  // Live clock
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        if (isAdmin(user)) {
-          const [uR, sR, aR, tR, lR] = await Promise.allSettled([
-            apiFetch("/users").then(r => r.json()),
-            apiFetch("/salaries").then(r => r.json()),
-            apiFetch("/attendance").then(r => r.json()),
-            apiFetch("/tasks").then(r => r.json()),
-            apiFetch("/leaves").then(r => r.json()),
-          ]);
-          setUsers(safeArr(uR.value, "users", "data"));
-          setSalaries(safeArr(sR.value, "salaries", "data"));
-          setAttendance(safeArr(aR.value, "attendance", "records", "data"));
-          setTasks(safeArr(tR.value, "tasks", "data"));
-          setLeaves(safeArr(lR.value, "leaves", "data"));
-        } else {
-          const [aR, sR, tR] = await Promise.allSettled([
-            apiFetch("/attendance/monthly").then(r => r.json()),
-            apiFetch("/salaries").then(r => r.json()),
-            apiFetch("/tasks").then(r => r.json()),
-          ]);
-          setAttendance(safeArr(aR.value, "attendance", "records", "data"));
-          setSalaries(safeArr(sR.value, "salaries", "data"));
-          setTasks(safeArr(tR.value, "tasks", "data"));
-        }
-      } catch { addToast("Failed to load dashboard", "error"); }
-      setLoading(false);
-    })();
+    const t = setInterval(() => {
+      setLiveTime(new Date());
+      setElapsed(e => e + 1);
+    }, 1000);
+    return () => clearInterval(t);
   }, []);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      if (isAdmin(user)) {
+        const [uR, sR, aR, tR, lR, hR, annR, audR] = await Promise.allSettled([
+          apiFetch("/users").then(r => r.json()),
+          apiFetch("/salaries").then(r => r.json()),
+          apiFetch("/attendance").then(r => r.json()),
+          apiFetch("/tasks").then(r => r.json()),
+          apiFetch("/leaves").then(r => r.json()),
+          apiFetch("/holidays").then(r => r.json()),
+          apiFetch("/announcements").then(r => r.json()),
+          apiFetch("/audit").then(r => r.json()),
+        ]);
+        setUsers(safeArr(uR.value, "users", "data"));
+        setSalaries(safeArr(sR.value, "salaries", "data"));
+        setAttendance(safeArr(aR.value, "attendance", "records", "data"));
+        setTasks(safeArr(tR.value, "tasks", "data"));
+        setLeaves(safeArr(lR.value, "leaves", "data"));
+        setHolidays(safeArr(hR.value, "holidays", "data"));
+        setAnnouncements(safeArr(annR.value, "announcements", "data"));
+        setAuditLogs(safeArr(audR.value, "logs", "data"));
+      } else {
+        const [aR, sR, tR, lR, annR] = await Promise.allSettled([
+          apiFetch("/attendance/monthly").then(r => r.json()),
+          apiFetch("/salaries").then(r => r.json()),
+          apiFetch("/tasks").then(r => r.json()),
+          apiFetch("/leaves").then(r => r.json()),
+          apiFetch("/announcements").then(r => r.json()),
+        ]);
+        const attRecs = safeArr(aR.value, "attendance", "records", "data");
+        setAttendance(attRecs);
+        setSalaries(safeArr(sR.value, "salaries", "data"));
+        setTasks(safeArr(tR.value, "tasks", "data"));
+        setLeaves(safeArr(lR.value, "leaves", "data"));
+        setAnnouncements(safeArr(annR.value, "announcements", "data"));
+        const today = new Date().toDateString();
+        setTodayRec(attRecs.find(r => r.date && new Date(r.date).toDateString() === today) || null);
+      }
+    } catch { addToast("Failed to load dashboard", "error"); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  // ── EMPLOYEE SESSION ACTIONS ──────────────────────────────────────────────
+  const handleStartSession = async () => {
+    setSessionLoading(true);
+    try {
+      const r = await apiFetch("/attendance/login", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || "Failed");
+      addToast(d.message || "Session started!", "success");
+      await load();
+    } catch (e) { addToast(e.message || "Could not start session", "error"); }
+    setSessionLoading(false);
+  };
+
+  const handleEndSession = async () => {
+    setSessionLoading(true);
+    try {
+      const r = await apiFetch("/attendance/checkout", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || "Failed");
+      addToast("Session ended. " + (d.attendance?.totalHours ? `Total: ${d.attendance.totalHours}h` : ""), "success");
+      await load();
+    } catch (e) { addToast(e.message || "Could not end session", "error"); }
+    setSessionLoading(false);
+  };
 
   // ── EMPLOYEE DASHBOARD ────────────────────────────────────────────────────
   if (!isAdmin(user)) {
-    const myPresent  = attendance.filter(a => ["present","on_time","early"].includes(a.status?.toLowerCase())).length;
-    const myAbsent   = attendance.filter(a => a.status?.toLowerCase() === "absent").length;
-    const myLate     = attendance.filter(a => a.status?.toLowerCase() === "late").length;
-    const myHalf     = attendance.filter(a => a.status?.toLowerCase() === "half_day").length;
-    const mySal      = salaries[0];
-    const myTasks    = tasks.length;
-    const myDone     = tasks.filter(t => t.status === "completed").length;
-    const myInProg   = tasks.filter(t => t.status === "in_progress").length;
-    const today      = new Date();
-    const todayRec   = attendance.find(a => a.date && new Date(a.date).toDateString() === today.toDateString());
+    const today         = new Date();
+    const thisMonth     = attendance.filter(a => {
+      if (!a.date) return false;
+      const d = new Date(a.date);
+      return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+    });
+    const myPresent     = thisMonth.filter(a => ["present","on_time","early","late"].includes(a.status?.toLowerCase())).length;
+    const myAbsent      = thisMonth.filter(a => a.status?.toLowerCase() === "absent").length;
+    const myLate        = thisMonth.filter(a => a.status?.toLowerCase() === "late").length;
+    const mySal         = salaries[0];
+    const myTasks       = tasks.length;
+    const myDone        = tasks.filter(t => t.status === "completed").length;
+    const myInProg      = tasks.filter(t => t.status === "in_progress").length;
+    const myPending     = tasks.filter(t => t.status === "pending").length;
+    const myLeaves      = leaves.length;
+    const pendingLeaves = leaves.filter(l => l.status === "pending").length;
+    const sessionActive = todayRec?.sessionActive || (todayRec?.checkIn && !todayRec?.checkOut);
+    const sessionDone   = todayRec?.checkOut;
 
-    // Last 7 days attendance bar data
+    // Live elapsed display
+    const elapsedSecs = todayRec?.checkIn && !sessionDone
+      ? Math.floor((liveTime - new Date(todayRec.checkIn)) / 1000)
+      : todayRec?.totalHours ? Math.round(todayRec.totalHours * 3600) : 0;
+    const fmtElapsed = s => {
+      const h = Math.floor(Math.abs(s) / 3600);
+      const m = Math.floor((Math.abs(s) % 3600) / 60);
+      const sec = Math.abs(s) % 60;
+      return `${String(h).padStart(2,"0")}h : ${String(m).padStart(2,"0")}m : ${String(sec).padStart(2,"0")}s`;
+    };
+
+    // Weekly chart
     const myLast7 = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - 6 + i);
       const label = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][d.getDay() === 0 ? 6 : d.getDay() - 1];
       const rec = attendance.find(a => a.date && new Date(a.date).toDateString() === d.toDateString());
-      const val = rec ? (["present","on_time","early"].includes(rec.status?.toLowerCase()) ? 1 : 0) : 0;
-      return { label, value: val * 8 };
+      const hrs = rec?.totalHours || rec?.hoursWorked || (["present","on_time","early"].includes(rec?.status?.toLowerCase()) ? 8 : 0);
+      return { label, value: Number(hrs) || 0 };
     });
+
+    // Today's status color/label
+    const sessionStatusColor = sessionDone ? C.blue : sessionActive ? C.green : C.t3;
+    const sessionStatusLabel = sessionDone ? "Completed" : sessionActive ? "● Live" : "Not Started";
+
+    // Task priority breakdown
+    const highTasks = tasks.filter(t => t.priority === "high" && t.status !== "completed");
+    const medTasks  = tasks.filter(t => t.priority === "medium" && t.status !== "completed");
 
     return (
       <div className="scroll" style={{ padding: "22px 24px" }}>
-        {/* Header */}
+        {/* ── Header ── */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 22 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: C.t1, letterSpacing: "-.02em" }}>
-              Welcome back, {user?.name?.split(" ")[0] || "there"}! 👋
+              Good {liveTime.getHours() < 12 ? "Morning" : liveTime.getHours() < 17 ? "Afternoon" : "Evening"}, {user?.name?.split(" ")[0] || "there"}! 👋
             </h1>
-            <p style={{ fontSize: 13, color: C.t2, marginTop: 4 }}>Here's your personal overview for today.</p>
+            <p style={{ fontSize: 13, color: C.t2, marginTop: 4 }}>Here's what's happening today.</p>
           </div>
-          <div style={{ fontSize: 13, color: C.t2, fontWeight: 500 }}>
-            {today.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          <div style={{ textAlign: "right" }}>
+            <p style={{ fontSize: 20, fontWeight: 700, color: C.t1, fontVariantNumeric: "tabular-nums" }}>
+              {liveTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </p>
+            <p style={{ fontSize: 12, color: C.t2 }}>
+              {today.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </p>
           </div>
         </div>
 
-        {/* Stat cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 18 }}>
-          {[
-            { label: "Days Present", value: myPresent, gradient: `linear-gradient(135deg,${C.green},#16a34a)`,     icon: CheckCircle2 },
-            { label: "Days Absent",  value: myAbsent,  gradient: "linear-gradient(135deg,#ef4444,#dc2626)",        icon: AlertCircle },
-            { label: "Days Late",    value: myLate,    gradient: "linear-gradient(135deg,#f59e0b,#d97706)",        icon: Clock },
-            { label: "Half Days",    value: myHalf,    gradient: `linear-gradient(135deg,${C.cyan},#0284c7)`,      icon: CalendarCheck },
-          ].map(s => (
-            <StatCard key={s.label} label={s.label} value={loading ? "—" : s.value} gradient={s.gradient} icon={s.icon} loading={loading} />
-          ))}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 340px", gap: 18 }}>
-          {/* Attendance chart */}
-          <div className="card" style={{ padding: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Attendance (This Week)</h2>
-            </div>
-            {loading ? <Sk h={130} /> : (
-              <ResponsiveContainer width="100%" height={140}>
-                <BarChart data={myLast7} barSize={18}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: C.t3, fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis hide />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="value" name="Hours" fill={C.accent} radius={[6,6,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-            {todayRec && (
-              <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 12, color: C.t2 }}>Today: {statusBadge(todayRec.status)}</span>
+        {/* ── Top Stat Cards ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
+          {/* Attendance Today */}
+          <div className="card" style={{ padding: 20, position: "relative", overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: C.green + "22", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <CalendarCheck size={16} color={C.green} />
               </div>
-            )}
+              <span style={{ fontSize: 12, color: C.t2, fontWeight: 600 }}>Attendance Today</span>
+            </div>
+            {loading ? <Sk h={28} /> : <>
+              <p style={{ fontSize: 22, fontWeight: 800, color: sessionDone ? C.blue : sessionActive ? C.green : C.t3, marginBottom: 4 }}>
+                {todayRec ? (sessionDone ? "Completed" : sessionActive ? "Active" : todayRec.status || "Present") : "Not Started"}
+              </p>
+              <p style={{ fontSize: 11, color: sessionStatusColor, fontWeight: 600 }}>{sessionStatusLabel}</p>
+            </>}
           </div>
 
-          {/* Tasks */}
+          {/* Worklogs today */}
           <div className="card" style={{ padding: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>My Tasks</h2>
-              <button onClick={() => setPage("tasks")} style={{ fontSize: 11, color: C.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>View All</button>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: C.accent + "22", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ClipboardList size={16} color={C.accent} />
+              </div>
+              <span style={{ fontSize: 12, color: C.t2, fontWeight: 600 }}>Days Present</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-              {[{ l: "Total", v: myTasks, c: C.accent }, { l: "Done", v: myDone, c: C.green }, { l: "In Progress", v: myInProg, c: C.blue }, { l: "Pending", v: myTasks - myDone - myInProg, c: C.amber }].map(x => (
-                <div key={x.l} style={{ padding: "10px 12px", background: x.c + "14", borderRadius: 10, border: `1px solid ${x.c}22` }}>
-                  <p style={{ fontSize: 20, fontWeight: 800, color: x.c }}>{loading ? "—" : x.v}</p>
-                  <p style={{ fontSize: 11, color: C.t3 }}>{x.l}</p>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {tasks.slice(0, 3).map((t, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: "rgba(255,255,255,0.02)", borderRadius: 9 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: t.status === "completed" ? C.green : t.status === "in_progress" ? C.blue : C.amber, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: C.t2, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
-                </div>
-              ))}
-            </div>
+            {loading ? <Sk h={28} /> : <>
+              <p style={{ fontSize: 28, fontWeight: 800, color: C.accent }}>{myPresent}</p>
+              <p style={{ fontSize: 11, color: C.t2 }}>This month · {myLate} late · {myAbsent} absent</p>
+            </>}
           </div>
 
-          {/* Right: salary + quick actions */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {mySal && (
-              <div className="card" style={{ padding: 18 }}>
-                <h3 style={{ fontSize: 13, fontWeight: 700, color: C.t1, marginBottom: 12 }}>Latest Salary — {MONTHS[(mySal.month||1)-1]}</h3>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  {[{ l: "Basic", v: mySal.basicSalary, c: C.t1 }, { l: "Net Pay", v: mySal.netSalary || mySal.totalSalary, c: C.accent }].map(x => (
-                    <div key={x.l} style={{ padding: "10px", background: "rgba(255,255,255,0.02)", borderRadius: 9 }}>
-                      <p style={{ fontSize: 10, color: C.t3, marginBottom: 3, textTransform: "uppercase" }}>{x.l}</p>
-                      <p style={{ fontSize: 15, fontWeight: 800, color: x.c }}>₹{Number(x.v||0).toLocaleString("en-IN")}</p>
+          {/* Pending Tasks */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: C.amber + "22", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ListTodo size={16} color={C.amber} />
+              </div>
+              <span style={{ fontSize: 12, color: C.t2, fontWeight: 600 }}>Pending Tasks</span>
+            </div>
+            {loading ? <Sk h={28} /> : <>
+              <p style={{ fontSize: 28, fontWeight: 800, color: C.amber }}>{myTasks - myDone}</p>
+              <p style={{ fontSize: 11, color: C.t2 }}>{myTasks} total · {myDone} done</p>
+            </>}
+          </div>
+
+          {/* Leave Balance */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: C.purple + "22", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <FileText size={16} color={C.purple} />
+              </div>
+              <span style={{ fontSize: 12, color: C.t2, fontWeight: 600 }}>Leave Requests</span>
+            </div>
+            {loading ? <Sk h={28} /> : <>
+              <p style={{ fontSize: 28, fontWeight: 800, color: C.purple }}>{myLeaves}</p>
+              <p style={{ fontSize: 11, color: C.t2 }}>{pendingLeaves} pending approval</p>
+            </>}
+          </div>
+        </div>
+
+        {/* ── Main 2-col layout ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 18 }}>
+
+          {/* ── LEFT ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+            {/* My Work Session Card */}
+            <div className="card" style={{ padding: 22 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>My Work Session</h2>
+                <span style={{ fontSize: 11, fontWeight: 700, color: sessionStatusColor, background: sessionStatusColor + "18", padding: "4px 10px", borderRadius: 20 }}>
+                  {sessionStatusLabel}
+                </span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
+                <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+                  <p style={{ fontSize: 11, color: C.t2, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Start Time</p>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: todayRec?.checkIn ? C.green : C.t3 }}>
+                    {todayRec?.checkIn ? new Date(todayRec.checkIn).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                  </p>
+                  <p style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>
+                    {todayRec?.checkIn ? today.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "Not started"}
+                  </p>
+                </div>
+                <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+                  <p style={{ fontSize: 11, color: C.t2, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Elapsed Time</p>
+                  <p style={{ fontSize: 16, fontWeight: 800, color: sessionActive ? C.accent : C.t3, fontVariantNumeric: "tabular-nums" }}>
+                    {sessionActive ? fmtElapsed(elapsedSecs) : todayRec?.totalHours ? `${Number(todayRec.totalHours).toFixed(1)}h total` : "—"}
+                  </p>
+                  <p style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>{sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start"}</p>
+                </div>
+                <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+                  <p style={{ fontSize: 11, color: C.t2, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>End Time</p>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: todayRec?.checkOut ? C.red : C.t3 }}>
+                    {todayRec?.checkOut ? new Date(todayRec.checkOut).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                  </p>
+                  <p style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>{todayRec?.checkOut ? "Checked out" : "Still running"}</p>
+                </div>
+              </div>
+              {/* Session button */}
+              {!sessionDone ? (
+                sessionActive ? (
+                  <button
+                    onClick={handleEndSession}
+                    disabled={sessionLoading}
+                    style={{ width: "100%", padding: "13px", background: `linear-gradient(135deg,${C.red},#dc2626)`, border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: sessionLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: sessionLoading ? 0.7 : 1, transition: "opacity .2s" }}
+                  >
+                    <AlertCircle size={16} />
+                    {sessionLoading ? "Ending…" : "End Session"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStartSession}
+                    disabled={sessionLoading}
+                    style={{ width: "100%", padding: "13px", background: `linear-gradient(135deg,${C.accent},${C.accentD})`, border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: sessionLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: sessionLoading ? 0.7 : 1, transition: "opacity .2s" }}
+                  >
+                    <CheckCircle2 size={16} />
+                    {sessionLoading ? "Starting…" : "Start Session"}
+                  </button>
+                )
+              ) : (
+                <div style={{ padding: "12px 16px", background: C.blue + "14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
+                  <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed for today · {todayRec?.totalHours ? `${Number(todayRec.totalHours).toFixed(1)}h worked` : ""}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Attendance Chart + Tasks side by side */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+              {/* Attendance this week */}
+              <div className="card" style={{ padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Attendance (This Week)</h2>
+                  <button onClick={() => setPage("attendance")} style={{ fontSize: 11, color: C.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>View All</button>
+                </div>
+                {loading ? <Sk h={130} /> : (
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={myLast7} barSize={20}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fill: C.t3, fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      <Tooltip content={<CustomTooltip />} formatter={v => [`${v}h`, "Hours"]} />
+                      <Bar dataKey="value" name="Hours" fill={C.accent} radius={[6,6,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+                <div style={{ display: "flex", gap: 14, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                  {[{ l: "Present", v: myPresent, c: C.green }, { l: "Late", v: myLate, c: C.amber }, { l: "Absent", v: myAbsent, c: C.red }].map(x => (
+                    <div key={x.l} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: x.c }} />
+                      <span style={{ fontSize: 11, color: C.t3 }}>{x.l}: <span style={{ color: x.c, fontWeight: 700 }}>{x.v}</span></span>
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setPage("salary")} style={{ marginTop: 10, width: "100%", fontSize: 12, color: C.accent, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>View Payslip →</button>
               </div>
-            )}
-            <div className="card" style={{ padding: 18 }}>
-              <h3 style={{ fontSize: 13, fontWeight: 700, color: C.t1, marginBottom: 12 }}>Quick Actions</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {[
-                  { label: "Mark Attendance", icon: CalendarCheck, color: C.green,  page: "attendance" },
-                  { label: "Add Work Log",    icon: ClipboardList, color: C.accent, page: "worklogs" },
-                  { label: "My Timesheet",    icon: Activity,      color: C.blue,   page: "timesheet" },
-                  { label: "Messages",        icon: MessageSquare, color: C.purple, page: "chat" },
-                ].map(a => (
-                  <button key={a.label} onClick={() => setPage(a.page)} className="quick-action" style={{ padding: "9px 12px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 26, height: 26, borderRadius: 7, background: a.color + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <a.icon size={12} color={a.color} />
+
+              {/* Task progress */}
+              <div className="card" style={{ padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Task Progress</h2>
+                  <button onClick={() => setPage("tasks")} style={{ fontSize: 11, color: C.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>View All</button>
+                </div>
+                {loading ? <Sk h={130} /> : myTasks === 0 ? (
+                  <div style={{ textAlign: "center", padding: "30px 0", color: C.t3, fontSize: 13 }}>No tasks assigned</div>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+                      <div style={{ position: "relative", flexShrink: 0 }}>
+                        <ResponsiveContainer width={90} height={90}>
+                          <PieChart>
+                            <Pie data={[{ value: myDone }, { value: myTasks - myDone }]} cx="50%" cy="50%" innerRadius={28} outerRadius={42} dataKey="value" strokeWidth={0}>
+                              <Cell fill={C.green} />
+                              <Cell fill="rgba(255,255,255,0.05)" />
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: C.t1 }}>{myTasks ? Math.round(myDone/myTasks*100) : 0}%</span>
+                        </div>
                       </div>
-                      <span style={{ fontSize: 12 }}>{a.label}</span>
+                      <div style={{ flex: 1 }}>
+                        {[{ l: "Completed", v: myDone, c: C.green }, { l: "In Progress", v: myInProg, c: C.blue }, { l: "Pending", v: myPending, c: C.amber }].map(x => (
+                          <div key={x.l} style={{ marginBottom: 8 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                              <span style={{ fontSize: 11, color: C.t2 }}>{x.l}</span>
+                              <span style={{ fontSize: 11, color: x.c, fontWeight: 700 }}>{x.v}</span>
+                            </div>
+                            <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 4 }}>
+                              <div style={{ height: "100%", width: `${myTasks ? x.v/myTasks*100 : 0}%`, background: x.c, borderRadius: 4, transition: "width .4s" }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <ChevronRight size={11} color={C.t3} />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Today's Tasks */}
+            <div className="card" style={{ padding: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Today's Tasks</h2>
+                <button onClick={() => setPage("tasks")} style={{ fontSize: 11, color: C.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>View All</button>
+              </div>
+              {loading ? Array(3).fill(0).map((_,i) => <Sk key={i} h={40} style={{ marginBottom: 8 }} />) : tasks.length === 0 ? (
+                <p style={{ color: C.t2, fontSize: 13, textAlign: "center", padding: "20px 0" }}>No tasks assigned</p>
+              ) : tasks.filter(t => t.status !== "completed").slice(0, 5).map((t, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: i < 4 ? `1px solid ${C.border}` : "none" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: t.priority === "high" ? C.red : t.priority === "medium" ? C.amber : C.green, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, color: C.t1, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</p>
+                    {t.dueDate && <p style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Due: {new Date(t.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</p>}
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: t.priority === "high" ? C.red + "22" : t.priority === "medium" ? C.amber + "22" : C.green + "22", color: t.priority === "high" ? C.red : t.priority === "medium" ? C.amber : C.green, textTransform: "capitalize", flexShrink: 0 }}>
+                    {t.priority || "Normal"}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Access */}
+            <div className="card" style={{ padding: 20 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 16 }}>Quick Access</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 10 }}>
+                {[
+                  { label: "Mark Attendance", sub: "Start / End session", icon: CalendarCheck, color: C.green,  page: "attendance" },
+                  { label: "Submit Worklog",  sub: "Log your work",        icon: ClipboardList, color: C.accent, page: "worklogs" },
+                  { label: "Request Leave",   sub: "Apply for leave",      icon: FileText,      color: C.amber,  page: "leaves" },
+                  { label: "View Payslip",    sub: "Salary details",       icon: Wallet,        color: C.blue,   page: "salary" },
+                  { label: "Chat",            sub: "Team communication",   icon: MessageSquare, color: C.purple, page: "chat" },
+                  { label: "Tools Hub",       sub: "Useful tools",         icon: Wrench,        color: C.cyan,   page: "tools" },
+                ].map(a => (
+                  <button key={a.label} onClick={() => setPage(a.page)} style={{ background: a.color + "10", border: `1px solid ${a.color}22`, borderRadius: 14, padding: "16px 10px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, transition: "all .18s", textAlign: "center" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = a.color + "20"; e.currentTarget.style.borderColor = a.color + "55"; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = a.color + "10"; e.currentTarget.style.borderColor = a.color + "22"; }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 13, background: a.color + "22", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <a.icon size={20} color={a.color} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{a.label}</p>
+                      <p style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{a.sub}</p>
+                    </div>
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* ── RIGHT PANEL ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+            {/* Latest Salary */}
+            {mySal && (
+              <div className="card" style={{ padding: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>My Payslip</h3>
+                  <button onClick={() => setPage("salary")} style={{ fontSize: 11, color: C.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>View →</button>
+                </div>
+                <div style={{ padding: "12px 14px", background: C.accentG, borderRadius: 10, marginBottom: 10 }}>
+                  <p style={{ fontSize: 11, color: C.t2, marginBottom: 4 }}>Net Salary · {MONTHS[(mySal.month || new Date().getMonth() + 1) - 1]}</p>
+                  <p style={{ fontSize: 24, fontWeight: 800, color: C.accent }}>₹{Number(mySal.netSalary || mySal.totalSalary || 0).toLocaleString("en-IN")}</p>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                  <span style={{ color: C.t2 }}>Status</span>
+                  <span style={{ color: mySal.status === "paid" ? C.green : C.amber, fontWeight: 700, textTransform: "capitalize" }}>{mySal.status || "Pending"}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Upcoming Leave */}
+            <div className="card" style={{ padding: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <h3 style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Leave Requests</h3>
+                <button onClick={() => setPage("leaves")} style={{ fontSize: 11, color: C.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>View All</button>
+              </div>
+              {loading ? <Sk h={60} /> : leaves.length === 0 ? (
+                <p style={{ fontSize: 12, color: C.t3, textAlign: "center", padding: "12px 0" }}>No leave requests</p>
+              ) : leaves.slice(0, 3).map((l, i) => (
+                <div key={i} style={{ padding: "10px 0", borderBottom: i < 2 ? `1px solid ${C.border}` : "none" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: C.t1, fontWeight: 600, textTransform: "capitalize" }}>{l.type || l.leaveType || "Leave"}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: l.status === "approved" ? C.green + "22" : l.status === "rejected" ? C.red + "22" : C.amber + "22", color: l.status === "approved" ? C.green : l.status === "rejected" ? C.red : C.amber, textTransform: "capitalize" }}>
+                      {l.status || "Pending"}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
+                    {l.from ? new Date(l.from).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""} — {l.to ? new Date(l.to).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""} · {l.days || "?"} days
+                  </p>
+                </div>
+              ))}
+              <button onClick={() => setPage("leaves")} style={{ marginTop: 12, width: "100%", padding: "9px", background: C.accentG, border: `1px solid ${C.accent}33`, borderRadius: 9, color: C.accent, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                + Apply Leave
+              </button>
+            </div>
+
+            {/* Latest Announcements */}
+            <div className="card" style={{ padding: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <h3 style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>Announcements</h3>
+                <button onClick={() => setPage("announcements")} style={{ fontSize: 11, color: C.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>View All</button>
+              </div>
+              {loading ? <Sk h={80} /> : announcements.length === 0 ? (
+                <p style={{ fontSize: 12, color: C.t3, textAlign: "center", padding: "12px 0" }}>No announcements</p>
+              ) : announcements.slice(0, 3).map((a, i) => (
+                <div key={i} style={{ display: "flex", gap: 10, padding: "9px 0", borderBottom: i < 2 ? `1px solid ${C.border}` : "none" }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Bell size={13} color={C.accent} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 12, color: C.t1, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.title}</p>
+                    <p style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>{a.createdAt ? new Date(a.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Motivational banner */}
+            <div style={{ padding: "18px 20px", background: `linear-gradient(135deg,${C.accent}22,${C.purple}18)`, border: `1px solid ${C.accent}33`, borderRadius: 16 }}>
+              <p style={{ fontSize: 13, color: C.accent, fontWeight: 700, fontStyle: "italic", lineHeight: 1.5 }}>"Stay focused, keep building, and success will follow."</p>
+              <p style={{ fontSize: 11, color: C.t3, marginTop: 6 }}>— Your future is created by what you do today.</p>
             </div>
           </div>
         </div>
@@ -2148,6 +2458,16 @@ function AttendancePage({ addToast, user }) {
   const [todayRec, setTodayRec] = useState(null);
   const [settings, setSettings] = useState(null);
   const [search, setSearch] = useState("");
+  const [liveTime, setLiveTime] = useState(new Date());
+  useEffect(() => {
+    if (isAdmin(user)) return;
+    const t = setInterval(() => setLiveTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const fmtElapsed = s => {
+    const h = Math.floor(Math.abs(s)/3600), m = Math.floor((Math.abs(s)%3600)/60), sec = Math.abs(s)%60;
+    return String(h).padStart(2,"0")+"h : "+String(m).padStart(2,"0")+"m : "+String(sec).padStart(2,"0")+"s";
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2260,27 +2580,50 @@ function AttendancePage({ addToast, user }) {
         ))}
       </div>
 
-      {!isAdmin(user) && (
-        <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-            <div>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>Today's Status</h2>
-              {settings?.sessionStartTime && <p style={{ fontSize: 12, color: C.t2, marginTop: 4 }}>Session: {settings.sessionStartTime} — {settings.sessionEndTime}</p>}
-              {todayRec && (
-                <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
-                  <span style={{ fontSize: 12, color: C.t2 }}>Check-in: <span style={{ color: C.green, fontWeight: 600 }}>{formatTime(todayRec.checkIn || todayRec.loginTime)}</span></span>
-                  <span style={{ fontSize: 12, color: C.t2 }}>Check-out: <span style={{ color: C.red, fontWeight: 600 }}>{formatTime(todayRec.checkOut || todayRec.logoutTime)}</span></span>
+      {!isAdmin(user) && (() => {
+        const sessionActive = todayRec?.sessionActive || (todayRec?.checkIn && !todayRec?.checkOut);
+        const sessionDone   = !!todayRec?.checkOut;
+        const elapsedSecs   = todayRec?.checkIn && !sessionDone ? Math.floor((liveTime - new Date(todayRec.checkIn)) / 1000) : 0;
+        const statusColor   = sessionDone ? C.blue : sessionActive ? C.green : C.t3;
+        const statusLabel   = sessionDone ? "Completed" : sessionActive ? "● Live" : "Not Started";
+        return (
+          <div className="card" style={{ padding: 22, marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>My Work Session</h2>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {settings?.sessionStartTime && <span style={{ fontSize: 11, color: C.t2 }}>Window: {settings.sessionStartTime} — {settings.sessionEndTime || "—"}</span>}
+                <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: statusColor + "18", padding: "4px 12px", borderRadius: 20 }}>{statusLabel}</span>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
+              {[
+                { label: "Session Started", value: todayRec?.checkIn ? formatTime(todayRec.checkIn) : "—", sub: todayRec?.checkIn ? new Date(todayRec.checkIn).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "Not started yet", color: todayRec?.checkIn ? C.green : C.t3 },
+                { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : todayRec?.totalHours ? Number(todayRec.totalHours).toFixed(1)+"h total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
+                { label: "Session End",     value: todayRec?.checkOut ? formatTime(todayRec.checkOut) : "—", sub: todayRec?.checkOut ? "Checked out" : "Still running", color: todayRec?.checkOut ? C.red : C.t3 },
+              ].map(x => (
+                <div key={x.label} style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
+                  <p style={{ fontSize: 10, color: C.t2, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>{x.label}</p>
+                  <p style={{ fontSize: 16, fontWeight: 800, color: x.color, fontVariantNumeric: "tabular-nums" }}>{x.value}</p>
+                  <p style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>{x.sub}</p>
                 </div>
-              )}
+              ))}
             </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              {todayRec && statusBadge(todayRec.status)}
-              {!todayRec?.checkIn && !todayRec?.loginTime && <button className="btn-pri" onClick={handleCheckIn} disabled={checkLoading}><CheckCircle2 size={14} />{checkLoading ? "…" : "Check In"}</button>}
-              {(todayRec?.checkIn || todayRec?.loginTime) && !todayRec?.checkOut && !todayRec?.logoutTime && <button className="btn-danger" style={{ padding: "8px 16px", fontSize: 13 }} onClick={handleCheckOut} disabled={checkLoading}><AlertCircle size={14} />{checkLoading ? "…" : "Check Out"}</button>}
-            </div>
+            {sessionDone ? (
+              <div style={{ padding: "12px 16px", background: C.blue+"14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {todayRec?.totalHours ? Number(todayRec.totalHours).toFixed(1)+"h worked" : ""} · {statusBadge(todayRec?.status)}</p>
+              </div>
+            ) : sessionActive ? (
+              <button onClick={handleCheckOut} disabled={checkLoading} style={{ width: "100%", padding: "13px", background: `linear-gradient(135deg,${C.red},#dc2626)`, border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: checkLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: checkLoading ? 0.7 : 1 }}>
+                <AlertCircle size={16} />{checkLoading ? "Ending…" : "End Session"}
+              </button>
+            ) : (
+              <button onClick={handleCheckIn} disabled={checkLoading} style={{ width: "100%", padding: "13px", background: `linear-gradient(135deg,${C.accent},${C.accentD})`, border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: checkLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: checkLoading ? 0.7 : 1 }}>
+                <CheckCircle2 size={16} />{checkLoading ? "Starting…" : "Start Session"}
+              </button>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {tab === "monthly" && (
         <div className="card" style={{ padding: 20, marginBottom: 16 }}>
@@ -4722,6 +5065,77 @@ function ReportsPage({ addToast, user }) {
   );
 }
 
+
+// ─── NOTIFICATIONS PAGE (EMPLOYEE) ───────────────────────────────────────────
+function NotificationsPage({ addToast, user }) {
+  const [notifs, setNotifs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await apiFetch("/notifications");
+      const d = await r.json();
+      setNotifs(safeArr(d, "notifications", "data"));
+    } catch { addToast("Failed to load notifications", "error"); }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const markRead = async () => {
+    try {
+      await apiFetch("/notifications/mark-read", { method: "POST" });
+      addToast("All marked as read", "success"); load();
+    } catch { addToast("Failed", "error"); }
+  };
+
+  const typeIcon  = t => ({ task: ListTodo, leave: FileText, attendance: CalendarCheck, salary: Wallet, system: Bell })[t] || Bell;
+  const typeColor = t => ({ task: C.accent, leave: C.amber, attendance: C.green, salary: C.blue, system: C.purple })[t] || C.t2;
+  const timeAgo   = ts => { if (!ts) return ""; const s = Math.floor((Date.now() - new Date(ts)) / 1000); if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.floor(s/60)}m ago`; if (s < 86400) return `${Math.floor(s/3600)}h ago`; return `${Math.floor(s/86400)}d ago`; };
+
+  const unread = notifs.filter(n => !n.read).length;
+
+  return (
+    <PageShell title="Notifications" sub="Your alerts and updates"
+      actions={unread > 0 && <button className="btn-ghost" onClick={markRead}><CheckCircle2 size={14} />Mark all read</button>}
+    >
+      {loading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{Array(5).fill(0).map((_,i) => <Sk key={i} h={60} />)}</div>
+      ) : notifs.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 0", gap: 14 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 18, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Bell size={28} color={C.accent} />
+          </div>
+          <p style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>All caught up!</p>
+          <p style={{ fontSize: 13, color: C.t2 }}>No notifications yet</p>
+        </div>
+      ) : (
+        <div className="card" style={{ overflow: "hidden" }}>
+          {notifs.map((n, i) => {
+            const Icon  = typeIcon(n.type);
+            const color = typeColor(n.type);
+            return (
+              <div key={n._id || i} style={{ display: "flex", gap: 14, padding: "16px 20px", borderBottom: i < notifs.length - 1 ? `1px solid ${C.border}` : "none", background: n.read ? "transparent" : color + "06", transition: "background .2s" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: color + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Icon size={17} color={color} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{n.title}</p>
+                    {!n.read && <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0, display: "inline-block" }} />}
+                  </div>
+                  <p style={{ fontSize: 12, color: C.t2, lineHeight: 1.5 }}>{n.message}</p>
+                  <p style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>{timeAgo(n.createdAt)}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </PageShell>
+  );
+}
+
 // ─── ANNOUNCEMENTS ────────────────────────────────────────────────────────────
 function AnnouncementsPage({ addToast, user }) {
   const [announcements, setAnnouncements] = useState([]);
@@ -4899,7 +5313,7 @@ export default function App() {
   injectCSS();
   const [user, setUser]           = useState(() => { try { return JSON.parse(localStorage.getItem("ems_user")); } catch { return null; } });
   const [activePage, setActivePage] = useState("dashboard");
-  const [collapsed, setCollapsed]  = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("nx_sidebar") === "1");
   const [globalSearch, setGlobalSearch] = useState("");
   const [clock, setClock]          = useState("");
   const [toasts, setToasts]        = useState([]);
@@ -4948,6 +5362,7 @@ export default function App() {
     audit:         <AuditPage         {...props} />,
     profile:       <ProfilePage       {...props} />,
     announcements: <AnnouncementsPage {...props} />,
+    notifications: <NotificationsPage {...props} />,
     tools:         <ToolsPage />,
     chat:          <ChatPage user={{ id: user?._id || user?.id, name: user?.name, role: user?.role }} socket={null} onlineUsers={[]} />,
   };
@@ -4964,6 +5379,7 @@ export default function App() {
     expenses:      <ExpensesPage      {...props} />,
     announcements: <AnnouncementsPage {...props} />,
     profile:       <ProfilePage       {...props} />,
+    notifications: <NotificationsPage {...props} />,
     tools:         <ToolsPage />,
     chat:          <ChatPage user={{ id: user?._id || user?.id, name: user?.name, role: user?.role }} socket={null} onlineUsers={[]} />,
   };
@@ -4975,7 +5391,7 @@ export default function App() {
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: C.bg }}>
       <Sidebar active={activePage} setActive={p => { setActivePage(p); if (window.innerWidth < 768) setCollapsed(true); }} onLogout={handleLogout} user={user} collapsed={collapsed} setCollapsed={setCollapsed} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        <TopBar clock={clock} user={user} onNavigate={setActivePage} onToggleSidebar={() => setCollapsed(p => !p)} />
+        <TopBar clock={clock} user={user} onNavigate={setActivePage} onToggleSidebar={() => setCollapsed(p => { const next = !p; localStorage.setItem("nx_sidebar", next ? "1" : "0"); return next; })} />
         <div style={{ flex: 1, overflow: "hidden" }}>
           {currentPage}
         </div>
