@@ -5,13 +5,14 @@ import {
   Wrench, Bell, Search, LogOut, Clock, X, AlertCircle,
   CheckCircle2, Zap, Building2, Plus, ArrowUpRight,
   ChevronRight, ChevronDown, ChevronLeft, ChevronUp,
-  ClipboardList, Settings, UserPlus, Calendar, Moon,
+  ClipboardList, Settings, UserPlus, Calendar,
   Maximize2, Activity, TrendingUp, MessageSquare,
   Edit2, Trash2, Upload, RefreshCw, Menu, ListTodo,
   Briefcase, DollarSign, FileText, Star, MapPin,
   CreditCard, PieChart as PieIcon, Layers, Tag,
   Target, CheckSquare, Send, UserCheck, AlignLeft,
   Hash, Globe, Award, Eye, EyeOff, Copy,
+  Smartphone, Monitor, Lock, Megaphone, Download,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar,
@@ -58,6 +59,7 @@ const C = {
   purple:  "#a855f7", purpleG: "rgba(168,85,247,0.12)",
   cyan:    "#06b6d4", cyanG:   "rgba(6,182,212,0.12)",
   orange:  "#f97316", orangeG: "rgba(249,115,22,0.12)",
+  gold:    "#D4A24C", goldG:   "rgba(212,162,76,0.12)",
   t1: "#f1f5ff",
   t2: "#8892aa",
   t3: "#3d4d6a",
@@ -112,12 +114,15 @@ const EMP_NAV = [
   { section: "MAIN", items: [
     { id:"dashboard",     label:"Dashboard",           icon: LayoutDashboard },
     { id:"profile",       label:"My Profile",          icon: UserCircle },
-    { id:"attendance",    label:"Attendance",          icon: CalendarCheck },
-    { id:"worklogs",      label:"Worklogs",            icon: ClipboardList },
-    { id:"tasks",         label:"Tasks",               icon: ListTodo },
-    { id:"leaves",        label:"Leave Requests",      icon: FileText },
-    { id:"salary",        label:"My Payslip",          icon: Wallet },
-    { id:"notifications", label:"Notifications",       icon: Bell },
+    { id:"attendance",    label:"My Attendance",       icon: CalendarCheck },
+    { id:"tasks",         label:"My Tasks",            icon: ListTodo },
+    { id:"projects",      label:"My Projects",         icon: Briefcase },
+    { id:"worklogs",      label:"My Work Logs",        icon: ClipboardList },
+    { id:"timesheet",     label:"My Timesheet",        icon: Activity },
+    { id:"leaves",        label:"My Leave Requests",   icon: FileText },
+    { id:"holidays",      label:"Holidays",            icon: Calendar },
+    { id:"salary",        label:"My Payslips",         icon: Wallet },
+    { id:"announcements", label:"Announcements",       icon: Megaphone },
   ]},
   { section: "COMMUNICATION", items: [
     { id:"chat",          label:"Chat",                icon: MessageSquare },
@@ -506,12 +511,22 @@ function FormField({ label, children }) {
   );
 }
 
-function Inp({ value, onChange, placeholder, type = "text", icon: Icon, style: ext, disabled }) {
+function Inp({ value, onChange, placeholder, type = "text", icon: Icon, style: ext, disabled, showToggle = false, autoComplete, name, onKeyDown, maxLength }) {
+  const [show, setShow] = useState(false);
+  const isPassword = type === "password";
+  const effectiveType = isPassword && showToggle && show ? "text" : type;
   return (
     <div style={{ position: "relative", ...ext }}>
       {Icon && <Icon size={14} color={C.t3} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />}
-      <input className="inp" type={type} value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
-        style={{ paddingLeft: Icon ? 34 : 12, opacity: disabled ? 0.6 : 1 }} />
+      <input className="inp" type={effectiveType} value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
+        autoComplete={autoComplete} name={name} onKeyDown={onKeyDown} maxLength={maxLength}
+        style={{ paddingLeft: Icon ? 34 : 12, paddingRight: showToggle && isPassword ? 38 : 12, opacity: disabled ? 0.6 : 1 }} />
+      {showToggle && isPassword && (
+        <button type="button" tabIndex={-1} onClick={() => setShow(s => !s)} aria-label={show ? "Hide password" : "Show password"}
+          style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", cursor: "pointer", padding: 6, display: "flex", color: C.t2 }}>
+          {show ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+      )}
     </div>
   );
 }
@@ -601,6 +616,8 @@ function StatCard({ label, value, sub, deltaUp, gradient, icon: Icon, chart, loa
 function useSessionTimeout(user, onLogout) {
   useEffect(() => {
     if (!user) return;
+    // Spec §1.5: rememberMe skips client-side idle timeout; backend JWT still expires at 30 days
+    if (localStorage.getItem("ems_remember") === "1") return;
     let timer;
     (async () => {
       try {
@@ -644,18 +661,12 @@ function Sidebar({ active, setActive, onLogout, user, collapsed, setCollapsed })
         justifyContent: collapsed ? "center" : "flex-start",
         minHeight: 68,
       }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 10,
-          background: `linear-gradient(135deg, ${C.accent}, ${C.purple})`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0, boxShadow: `0 4px 16px rgba(99,102,241,0.45)`,
-        }}>
-          <Building2 size={18} color="#fff" />
-        </div>
+        <img src="/icons/icon-192.png" alt="Nexus Pro" width={36} height={36}
+          style={{ borderRadius: 10, flexShrink: 0, boxShadow: `0 4px 16px rgba(212,162,76,0.25)` }} />
         {!collapsed && (
           <div style={{ overflow: "hidden" }}>
-            <p style={{ fontWeight: 800, fontSize: 16, color: C.t1, letterSpacing: "-.01em", lineHeight: 1 }}>NEXUS</p>
-            <p style={{ fontSize: 10, color: C.t3, marginTop: 2, fontWeight: 500 }}>EMS PRO</p>
+            <p style={{ fontWeight: 800, fontSize: 16, color: C.t1, letterSpacing: "-.01em", lineHeight: 1 }}>Nexus Pro</p>
+            <p style={{ fontSize: 10, color: C.t3, marginTop: 2, fontWeight: 500 }}>Enterprise Management</p>
           </div>
         )}
       </div>
@@ -992,15 +1003,25 @@ function GlobalSearch({ onNavigate, user }) {
 }
 
 // ─── TOP BAR ──────────────────────────────────────────────────────────────────
-function TopBar({ clock, user, onNavigate, onToggleSidebar }) {
+function TopBar({ clock, user, onNavigate, onToggleSidebar, onLogout }) {
   const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [notifs, setNotifs] = useState([]);
+  const profileRef = useRef(null);
 
   useEffect(() => {
     apiFetch("/notifications").then(r => r.json())
       .then(d => setNotifs(safeArr(d, "notifications", "data").slice(0, 5)))
       .catch(() => {});
   }, []);
+
+  // Close profile menu on outside click
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onDoc = (e) => { if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [profileOpen]);
 
   const markAllRead = async () => {
     try { await apiFetch("/notifications/mark-read", { method: "POST" }); setNotifs([]); } catch {}
@@ -1030,9 +1051,6 @@ function TopBar({ clock, user, onNavigate, onToggleSidebar }) {
         <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.t2, fontWeight: 500, background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px" }}>
           <Clock size={11} color={C.t3} />{clock}
         </div>
-
-        {/* Moon */}
-        <button className="icon-btn"><Moon size={15} /></button>
 
         {/* Fullscreen */}
         <button className="icon-btn" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); }}>
@@ -1073,15 +1091,47 @@ function TopBar({ clock, user, onNavigate, onToggleSidebar }) {
         </div>
 
         {/* Profile */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 10, cursor: "pointer" }}>
-          <div style={{ width: 30, height: 30, borderRadius: 8, background: `linear-gradient(135deg,${C.accent},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff" }}>
-            {(user?.name?.[0] || "A").toUpperCase()}
+        <div ref={profileRef} style={{ position: "relative" }}>
+          <div onClick={() => setProfileOpen(p => !p)}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", background: profileOpen ? "rgba(99,102,241,0.08)" : "rgba(255,255,255,0.04)", border: `1px solid ${profileOpen ? "rgba(99,102,241,0.3)" : C.border}`, borderRadius: 10, cursor: "pointer", transition: "all .15s" }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: `linear-gradient(135deg,${C.accent},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#fff" }}>
+              {(user?.name?.[0] || "A").toUpperCase()}
+            </div>
+            <div style={{ lineHeight: 1.3 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{user?.name?.split(" ")[0] || "Admin"}</p>
+              <p style={{ fontSize: 10, color: C.t3 }}>{user?.role === "super_admin" ? "Super Admin" : user?.role === "admin" ? "Admin" : "Employee"}</p>
+            </div>
+            <ChevronDown size={12} color={C.t3} style={{ transition: "transform .2s", transform: profileOpen ? "rotate(180deg)" : "rotate(0deg)" }} />
           </div>
-          <div style={{ lineHeight: 1.3 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: C.t1 }}>{user?.name?.split(" ")[0] || "Admin"}</p>
-            <p style={{ fontSize: 10, color: C.t3 }}>{user?.role === "super_admin" ? "Super Admin" : user?.role === "admin" ? "Admin" : "Employee"}</p>
-          </div>
-          <ChevronDown size={12} color={C.t3} />
+          {profileOpen && (
+            <div className="fadeIn" style={{ position: "absolute", top: 50, right: 0, width: 220, background: C.panel, border: `1px solid ${C.border}`, borderRadius: 12, boxShadow: "0 16px 48px rgba(0,0,0,0.6)", zIndex: 1000, overflow: "hidden" }}>
+              <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}` }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: C.t1 }}>{user?.name || "User"}</p>
+                <p style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>{user?.email || ""}</p>
+              </div>
+              <button onClick={() => { setProfileOpen(false); onNavigate?.("profile"); }}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer", color: C.t1, fontSize: 13, textAlign: "left", fontFamily: "inherit" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(99,102,241,0.08)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <UserCircle size={14} color={C.t2} /> My Profile
+              </button>
+              {isAdmin(user) && (
+                <button onClick={() => { setProfileOpen(false); onNavigate?.("company"); }}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer", color: C.t1, fontSize: 13, textAlign: "left", fontFamily: "inherit" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(99,102,241,0.08)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <Settings size={14} color={C.t2} /> Settings
+                </button>
+              )}
+              <div style={{ height: 1, background: C.border, margin: "4px 0" }} />
+              <button onClick={() => { setProfileOpen(false); onLogout?.(); }}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer", color: C.red, fontSize: 13, textAlign: "left", fontWeight: 600, fontFamily: "inherit" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.08)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <LogOut size={14} /> Sign out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -2727,10 +2777,14 @@ function WorklogsPage({ addToast, user }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState(null); // worklog being edited
   const [form, setForm] = useState({ description: "", hoursWorked: "", date: new Date().toISOString().split("T")[0], projectName: "" });
   const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const fileRef = useRef(null);
+
+  const today = new Date().toISOString().split("T")[0];
 
   const load = async () => {
     setLoading(true);
@@ -2740,19 +2794,56 @@ function WorklogsPage({ addToast, user }) {
   };
   useEffect(() => { load(); }, []);
 
-  const filtered = logs.filter(l => !search || [l.userId?.name, l.description, l.projectName].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+  // Fix #15: populate is `user` not `userId`
+  const filtered = logs.filter(l => !search ||
+    [l.user?.name, l.description, l.projectName].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ description: "", hoursWorked: "", date: today, projectName: "" });
+    setFile(null);
+    setModal(true);
+  };
+
+  const openEdit = (row) => {
+    // Same-day check (matches backend rule)
+    if (!isAdmin(user) && row.date && row.date.split("T")[0] !== today) {
+      addToast("You can only edit same-day work logs", "error");
+      return;
+    }
+    setEditing(row);
+    setForm({
+      description: row.description || "",
+      hoursWorked: String(row.hoursWorked || ""),
+      date: (row.date || today).split("T")[0],
+      projectName: row.projectName || "",
+    });
+    setFile(null);
+    setModal(true);
+  };
 
   const handleSave = async () => {
     if (!form.description || !form.hoursWorked) return addToast("Description and hours required", "error");
     setSaving(true);
     try {
-      const fd = new FormData();
-      Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v); });
-      if (file) fd.append("files", file);
-      const r = await fetch(`${API}/worklogs`, { method: "POST", headers: { Authorization: `Bearer ${getToken()}` }, body: fd });
-      if (!r.ok) throw new Error();
-      addToast("Work log saved", "success"); setModal(false);
-      setForm({ description: "", hoursWorked: "", date: new Date().toISOString().split("T")[0], projectName: "" }); setFile(null); load();
+      if (editing) {
+        // Edit: PUT JSON (file changes need a fresh log)
+        const r = await apiFetch(`/worklogs/${editing._id}`, { method: "PUT", body: JSON.stringify(form) });
+        if (!r.ok) throw new Error();
+        addToast("Work log updated", "success");
+      } else {
+        const fd = new FormData();
+        Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v); });
+        if (file) fd.append("files", file);
+        const r = await fetch(`${API}/worklogs`, { method: "POST", headers: { Authorization: `Bearer ${getToken()}` }, body: fd });
+        if (!r.ok) throw new Error();
+        addToast("Work log saved", "success");
+      }
+      setModal(false);
+      setEditing(null);
+      setForm({ description: "", hoursWorked: "", date: today, projectName: "" });
+      setFile(null);
+      load();
     } catch { addToast("Failed to save", "error"); }
     setSaving(false);
   };
@@ -2762,28 +2853,60 @@ function WorklogsPage({ addToast, user }) {
     catch { addToast("Failed", "error"); }
   };
 
-  const handleDelete = async (id) => {
-    try { await apiFetch(`/worklogs/${id}`, { method: "DELETE" }); addToast("Deleted", "success"); load(); }
-    catch { addToast("Failed", "error"); }
+  // Universal Undo: 10s before final delete (spec §1.5)
+  const requestDelete = (row) => {
+    if (pendingDelete) clearTimeout(pendingDelete.timer);
+    setLogs(prev => prev.filter(l => l._id !== row._id));
+    const timer = setTimeout(async () => {
+      try { await apiFetch(`/worklogs/${row._id}`, { method: "DELETE" }); addToast("Deleted", "success"); }
+      catch { addToast("Failed to delete", "error"); load(); }
+      setPendingDelete(null);
+    }, 10000);
+    setPendingDelete({ row, timer });
+  };
+  const undoDelete = () => {
+    if (!pendingDelete) return;
+    clearTimeout(pendingDelete.timer);
+    setLogs(prev => [pendingDelete.row, ...prev]);
+    setPendingDelete(null);
+    addToast("Restored", "success");
   };
 
   return (
     <PageShell title="Work Logs" sub="Employee task records"
-      actions={<><Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" icon={Search} style={{ width: 220 }} /><button className="btn-pri" onClick={() => setModal(true)}><Plus size={14} />Add Log</button></>}
+      actions={<><Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" icon={Search} style={{ width: 220 }} /><button className="btn-pri" onClick={openCreate}><Plus size={14} />Add Log</button></>}
     >
       <Table loading={loading} columns={[
-        { key: "userId", label: "Employee", render: (v, row) => (
+        { key: "user", label: "Employee", render: (v, row) => (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 28, height: 28, borderRadius: 7, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.accent }}>
-              {(v?.name || row.employeeName || user?.name || "?")[0]?.toUpperCase()}
+              {(v?.name || user?.name || "?")[0]?.toUpperCase()}
             </div>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>{v?.name || row.employeeName || user?.name || "—"}</span>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>{v?.name || user?.name || "—"}</div>
+              {v?.employeeId && <div style={{ fontSize: 10, color: C.t3 }}>{v.employeeId}</div>}
+            </div>
           </div>
         )},
         { key: "projectName",  label: "Project",     render: v => <span style={{ color: C.accent, fontSize: 12 }}>{v || "—"}</span> },
         { key: "description",  label: "Description", render: v => <span style={{ color: C.t2, fontSize: 12, maxWidth: 200, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v || "—"}</span> },
         { key: "hoursWorked",  label: "Hours",       render: v => v ? <span style={{ color: C.green, fontWeight: 600, fontSize: 12 }}>{v}h</span> : "—" },
         { key: "date",         label: "Date",        render: v => <span style={{ color: C.t2, fontSize: 12 }}>{v ? new Date(v).toLocaleDateString("en-IN") : "—"}</span> },
+        // Bug #11: render attachments as download links
+        { key: "files",        label: "Files", render: (v, row) => {
+          const files = Array.isArray(v) ? v : (Array.isArray(row.attachments) ? row.attachments : []);
+          if (!files.length) return <span style={{ color: C.t3, fontSize: 11 }}>—</span>;
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              {files.slice(0, 3).map((f, i) => (
+                <a key={i} href={f.url ? `${API.replace(/\/api\/?$/,"")}${f.url}` : "#"} target="_blank" rel="noreferrer" download
+                  style={{ color: C.accent, fontSize: 11, display: "flex", alignItems: "center", gap: 4, textDecoration: "none", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <Download size={11} /> {f.originalName || f.filename || "file"}
+                </a>
+              ))}
+            </div>
+          );
+        }},
         { key: "status",       label: "Status",      render: v => statusBadge(v || "pending") },
         { key: "_id", label: "Actions", render: (v, row) => (
           <div style={{ display: "flex", gap: 4 }}>
@@ -2791,27 +2914,38 @@ function WorklogsPage({ addToast, user }) {
               <button style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, background: C.greenG, color: C.green, border: `1px solid ${C.green}22`, cursor: "pointer", fontWeight: 600 }} onClick={() => updateStatus(row._id, "approved")}>✓ Approve</button>
               <button style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, background: C.redG, color: C.red, border: `1px solid ${C.red}22`, cursor: "pointer", fontWeight: 600 }} onClick={() => updateStatus(row._id, "rejected")}>Reject</button>
             </>}
-            <button className="btn-icon" style={{ background: C.redG, color: C.red }} onClick={() => handleDelete(row._id)}><Trash2 size={12} /></button>
+            {/* Bug #10: Edit button */}
+            <button className="btn-icon" style={{ background: C.accentG, color: C.accent }} title="Edit" onClick={() => openEdit(row)}><Edit2 size={12} /></button>
+            <button className="btn-icon" style={{ background: C.redG, color: C.red }} title="Delete" onClick={() => requestDelete(row)}><Trash2 size={12} /></button>
           </div>
         )},
       ]} rows={filtered} emptyText="No work logs" />
 
-      <Modal open={modal} onClose={() => setModal(false)} title="Add Work Log">
+      <Modal open={modal} onClose={() => { setModal(false); setEditing(null); }} title={editing ? "Edit Work Log" : "Add Work Log"}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <FormField label="Project Name"><Inp value={form.projectName} onChange={e => setForm(p => ({ ...p, projectName: e.target.value }))} placeholder="Project name…" /></FormField>
           <FormField label="Description"><textarea className="inp" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="What did you work on?" rows={3} style={{ resize: "vertical" }} /></FormField>
           <FormField label="Hours Worked"><Inp value={form.hoursWorked} onChange={e => setForm(p => ({ ...p, hoursWorked: e.target.value }))} placeholder="e.g. 6" type="number" /></FormField>
-          <FormField label="Date"><Inp value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} type="date" /></FormField>
-          <FormField label="Attachment">
-            <input ref={fileRef} type="file" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
-            <button className="btn-ghost" style={{ width: "100%" }} onClick={() => fileRef.current?.click()}><Upload size={14} />{file ? file.name : "Attach file"}</button>
-          </FormField>
+          <FormField label="Date"><Inp value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} type="date" disabled={!!editing} /></FormField>
+          {!editing && (
+            <FormField label="Attachment">
+              <input ref={fileRef} type="file" style={{ display: "none" }} onChange={e => setFile(e.target.files[0])} />
+              <button className="btn-ghost" style={{ width: "100%" }} onClick={() => fileRef.current?.click()}><Upload size={14} />{file ? file.name : "Attach file"}</button>
+            </FormField>
+          )}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button className="btn-ghost" onClick={() => setModal(false)}>Cancel</button>
-            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Log"}</button>
+            <button className="btn-ghost" onClick={() => { setModal(false); setEditing(null); }}>Cancel</button>
+            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : (editing ? "Update" : "Save Log")}</button>
           </div>
         </div>
       </Modal>
+
+      {pendingDelete && (
+        <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", background: C.panel, border: `2px solid ${C.gold}`, borderRadius: 12, padding: "10px 18px", boxShadow: "0 12px 40px rgba(212,162,76,0.3)", display: "flex", alignItems: "center", gap: 12, zIndex: 9000 }}>
+          <span style={{ color: C.t1, fontSize: 13, fontWeight: 600 }}>Work log deleted</span>
+          <button onClick={undoDelete} style={{ background: C.gold, border: "none", borderRadius: 7, padding: "5px 14px", cursor: "pointer", color: C.bg, fontSize: 11, fontWeight: 800, letterSpacing: ".04em" }}>UNDO</button>
+        </div>
+      )}
     </PageShell>
   );
 }
@@ -2864,7 +2998,11 @@ function TasksPage({ addToast, user }) {
   };
 
   const priorityColor = p => p === "high" ? C.red : p === "medium" ? C.amber : C.green;
-  const filtered = tasks.filter(t => !search || [t.title, t.assignedTo?.name, t.description].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+  const filtered = tasks.filter(t => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return [t.title, t.assignedTo?.name, t.assignedBy?.name, t.description, t.status, t.priority].some(f => f?.toLowerCase?.().includes(q));
+  });
 
   return (
     <PageShell title="Tasks" sub={isAdmin(user) ? "Assign and manage tasks" : "Your assigned tasks"}
@@ -2943,7 +3081,7 @@ function LeavesPage({ addToast, user }) {
   const [loading, setLoading] = useState(true);
   const [modal, setModal]     = useState(false);
   const [tab, setTab]         = useState(isAdmin(user) ? "requests" : "mine");
-  const [form, setForm] = useState({ type: "casual", from: "", to: "", reason: "" });
+  const [form, setForm] = useState({ type: "casual", isSingleDay: false, from: "", to: "", reasonCategory: "personal", reason: "" });
   const [saving, setSaving]   = useState(false);
 
   const load = async () => {
@@ -2955,13 +3093,24 @@ function LeavesPage({ addToast, user }) {
   useEffect(() => { load(); }, []);
 
   const handleSubmit = async () => {
-    if (!form.from || !form.to || !form.reason) return addToast("All fields required", "error");
+    if (!form.from) return addToast("Date required", "error");
+    if (!form.isSingleDay && !form.to) return addToast("End date required for date range", "error");
+    if (!form.reason?.trim()) return addToast("Reason required", "error");
     setSaving(true);
     try {
-      const r = await apiFetch("/leaves", { method: "POST", body: JSON.stringify(form) });
+      const payload = {
+        type: form.type,
+        isSingleDay: form.isSingleDay,
+        from: form.from,
+        to: form.isSingleDay ? form.from : form.to,
+        reasonCategory: form.reasonCategory,
+        reason: form.reason,
+      };
+      const r = await apiFetch("/leaves", { method: "POST", body: JSON.stringify(payload) });
       if (!r.ok) throw new Error();
       addToast("Leave request submitted!", "success"); setModal(false);
-      setForm({ type: "casual", from: "", to: "", reason: "" }); load();
+      setForm({ type: "casual", isSingleDay: false, from: "", to: "", reasonCategory: "personal", reason: "" });
+      load();
     } catch { addToast("Failed to submit leave", "error"); }
     setSaving(false);
   };
@@ -2971,18 +3120,24 @@ function LeavesPage({ addToast, user }) {
     catch { addToast("Failed", "error"); }
   };
 
-  const total    = leaves.length;
-  const pending  = leaves.filter(l => l.status === "pending" || !l.status).length;
-  const approved = leaves.filter(l => l.status === "approved").length;
-  const rejected = leaves.filter(l => l.status === "rejected").length;
+  const cancelMyLeave = async (id) => {
+    try { await apiFetch(`/leaves/${id}`, { method: "PUT", body: JSON.stringify({ status: "cancelled" }) }); addToast("Leave cancelled", "success"); load(); }
+    catch { addToast("Failed to cancel", "error"); }
+  };
 
-  const getDays = (from, to) => {
+  const total    = leaves.length;
+  const pending  = leaves.filter(l => ["pending","submitted","under_review"].includes(l.status) || !l.status).length;
+  const approved = leaves.filter(l => l.status === "approved").length;
+  const rejected = leaves.filter(l => l.status === "rejected" || l.status === "cancelled").length;
+
+  const getDays = (from, to, isSingleDay) => {
+    if (isSingleDay) return "1 day";
     if (!from || !to) return "—";
     const d = Math.ceil((new Date(to) - new Date(from)) / 86400000) + 1;
     return d + (d === 1 ? " day" : " days");
   };
 
-  const typeColor = t => ({ casual: C.blue, sick: C.red, earned: C.green, personal: C.purple, annual: C.amber }[t] || C.t2);
+  const typeColor = t => ({ casual: C.blue, sick: C.red, earned: C.green, personal: C.purple, annual: C.amber, unpaid: C.t3 }[t] || C.t2);
 
   return (
     <PageShell title="Leave Management" sub={isAdmin(user) ? "Review and manage leave requests" : "Your leave requests"}
@@ -3021,38 +3176,45 @@ function LeavesPage({ addToast, user }) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                {["Employee","Leave Type","From","To","Days","Reason","Status",...(isAdmin(user)?["Actions"]:[])].map(h => (
+                {["Employee","Leave Type","From","To","Days","Reason","Status","Actions"].map(h => (
                   <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: ".08em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? Array(5).fill(0).map((_, i) => (
-                <tr key={i} className="tr">{Array(isAdmin(user)?8:7).fill(0).map((_, j) => <td key={j} style={{ padding: "13px 16px" }}><Sk h={13} /></td>)}</tr>
+                <tr key={i} className="tr">{Array(8).fill(0).map((_, j) => <td key={j} style={{ padding: "13px 16px" }}><Sk h={13} /></td>)}</tr>
               )) : leaves.length === 0 ? (
-                <tr><td colSpan={isAdmin(user)?8:7} style={{ padding: "48px 16px", textAlign: "center", fontSize: 13, color: C.t2 }}>No leave requests</td></tr>
+                <tr><td colSpan={8} style={{ padding: "48px 16px", textAlign: "center", fontSize: 13, color: C.t2 }}>No leave requests</td></tr>
               ) : leaves.map((row, i) => (
                 <tr key={row._id || i} className="tr">
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.accent }}>{(row.user?.name || row.userId?.name || user?.name || "?")[0]?.toUpperCase()}</div>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{row.user?.name || row.userId?.name || user?.name || "—"}</span>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.accent }}>{(row.user?.name || user?.name || "?")[0]?.toUpperCase()}</div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>{row.user?.name || user?.name || "—"}</span>
                     </div>
                   </td>
                   <td style={{ padding: "12px 16px" }}><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: typeColor(row.type) + "22", color: typeColor(row.type), textTransform: "capitalize" }}>{row.type || "casual"}</span></td>
                   <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{row.from ? new Date(row.from).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{row.to ? new Date(row.to).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 13, color: C.t1, fontWeight: 600 }}>{getDays(row.from, row.to)}</td>
-                  <td style={{ padding: "12px 16px", fontSize: 12, color: C.t2, maxWidth: 160 }}><span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.reason || "—"}</span></td>
-                  <td style={{ padding: "12px 16px" }}>{statusBadge(row.status || "pending")}</td>
-                  {isAdmin(user) && (
-                    <td style={{ padding: "12px 16px" }}>
-                      <div style={{ display: "flex", gap: 5 }}>
-                        {row.status !== "approved" && <button className="btn-icon" title="Approve" style={{ background: C.greenG, color: C.green, width: 26, height: 26 }} onClick={() => updateLeave(row._id, "approved")}><CheckCircle2 size={12} /></button>}
-                        {row.status !== "rejected" && <button className="btn-icon" title="Reject" style={{ background: C.redG, color: C.red, width: 26, height: 26 }} onClick={() => updateLeave(row._id, "rejected")}><X size={12} /></button>}
-                      </div>
-                    </td>
-                  )}
+                  <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{row.isSingleDay ? <span style={{ color: C.gold }}>same day</span> : row.to ? new Date(row.to).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
+                  <td style={{ padding: "12px 16px", fontSize: 13, color: C.t1, fontWeight: 600 }}>{row.days || getDays(row.from, row.to, row.isSingleDay)}</td>
+                  <td style={{ padding: "12px 16px", fontSize: 12, color: C.t2, maxWidth: 200 }}>
+                    {row.reasonCategory && <div style={{ fontSize: 10, color: C.t3, marginBottom: 2, textTransform: "capitalize" }}>{row.reasonCategory}</div>}
+                    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.reason || "—"}</span>
+                  </td>
+                  <td style={{ padding: "12px 16px" }}>{statusBadge(row.status || "submitted")}</td>
+                  <td style={{ padding: "12px 16px" }}>
+                    <div style={{ display: "flex", gap: 5 }}>
+                      {isAdmin(user) ? <>
+                        {row.status !== "approved" && row.status !== "cancelled" && <button className="btn-icon" title="Approve" style={{ background: C.greenG, color: C.green, width: 26, height: 26 }} onClick={() => updateLeave(row._id, "approved")}><CheckCircle2 size={12} /></button>}
+                        {row.status !== "rejected" && row.status !== "cancelled" && <button className="btn-icon" title="Reject" style={{ background: C.redG, color: C.red, width: 26, height: 26 }} onClick={() => updateLeave(row._id, "rejected")}><X size={12} /></button>}
+                      </> : (
+                        ["submitted","under_review","pending"].includes(row.status) && (
+                          <button className="btn-icon" title="Cancel request" style={{ background: C.redG, color: C.red, width: 26, height: 26 }} onClick={() => cancelMyLeave(row._id)}><X size={12} /></button>
+                        )
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -3064,16 +3226,49 @@ function LeavesPage({ addToast, user }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <FormField label="Leave Type">
             <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} className="inp">
-              <option value="casual">Casual Leave</option><option value="sick">Sick Leave</option>
-              <option value="earned">Earned Leave</option><option value="personal">Personal Leave</option><option value="annual">Annual Leave</option>
+              <option value="casual">Casual Leave</option>
+              <option value="sick">Sick Leave</option>
+              <option value="earned">Earned Leave</option>
+              <option value="unpaid">Unpaid Leave</option>
+              <option value="personal">Personal Leave</option>
+              <option value="annual">Annual Leave</option>
             </select>
           </FormField>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormField label="From Date"><Inp value={form.from} onChange={e => setForm(p => ({ ...p, from: e.target.value }))} type="date" /></FormField>
-            <FormField label="To Date"><Inp value={form.to} onChange={e => setForm(p => ({ ...p, to: e.target.value }))} type="date" /></FormField>
-          </div>
-          {form.from && form.to && <div style={{ padding: "8px 12px", background: C.accentG, borderRadius: 8, fontSize: 12, color: C.accent }}>Duration: {getDays(form.from, form.to)}</div>}
-          <FormField label="Reason"><textarea className="inp" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} placeholder="Reason for leave…" rows={3} style={{ resize: "vertical" }} /></FormField>
+          {/* Bug #12: Single Day toggle */}
+          <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "10px 14px", background: form.isSingleDay ? C.accentG : "rgba(255,255,255,0.03)", border: `1px solid ${form.isSingleDay ? C.accent + "55" : C.border}`, borderRadius: 10, transition: "all .15s" }}>
+            <input type="checkbox" checked={form.isSingleDay} onChange={e => setForm(p => ({ ...p, isSingleDay: e.target.checked, to: e.target.checked ? "" : p.to }))}
+              style={{ width: 16, height: 16, accentColor: C.accent, cursor: "pointer" }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>Single Day Leave</div>
+              <div style={{ fontSize: 11, color: C.t3, marginTop: 1 }}>Toggle on for a one-day leave; toggle off to enter a date range.</div>
+            </div>
+          </label>
+          {form.isSingleDay ? (
+            <FormField label="Date"><Inp value={form.from} onChange={e => setForm(p => ({ ...p, from: e.target.value }))} type="date" /></FormField>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <FormField label="From Date"><Inp value={form.from} onChange={e => setForm(p => ({ ...p, from: e.target.value }))} type="date" /></FormField>
+              <FormField label="To Date"><Inp value={form.to} onChange={e => setForm(p => ({ ...p, to: e.target.value }))} type="date" /></FormField>
+            </div>
+          )}
+          {form.from && (form.isSingleDay || form.to) && (
+            <div style={{ padding: "8px 12px", background: C.accentG, borderRadius: 8, fontSize: 12, color: C.accent }}>
+              Duration: {form.isSingleDay ? "1 day" : getDays(form.from, form.to, false)}
+            </div>
+          )}
+          {/* Bug #13: Reason category dropdown + free text */}
+          <FormField label="Reason Category">
+            <select value={form.reasonCategory} onChange={e => setForm(p => ({ ...p, reasonCategory: e.target.value }))} className="inp">
+              <option value="sick">Sick / Medical</option>
+              <option value="personal">Personal</option>
+              <option value="family">Family Emergency</option>
+              <option value="travel">Travel / Vacation</option>
+              <option value="other">Other</option>
+            </select>
+          </FormField>
+          <FormField label="Detailed Reason">
+            <textarea className="inp" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} placeholder="Please describe the reason for your leave…" rows={3} style={{ resize: "vertical" }} />
+          </FormField>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button className="btn-ghost" onClick={() => setModal(false)}>Cancel</button>
             <button className="btn-pri" onClick={handleSubmit} disabled={saving}>{saving ? "Submitting…" : "Submit Request"}</button>
@@ -3209,178 +3404,280 @@ function HolidaysPage({ addToast, user }) {
 }
 
 // ─── SALARY ───────────────────────────────────────────────────────────────────
+// ─── SALARY / PAYSLIPS ────────────────────────────────────────────────────────
+// Spec §5.11: 5 earnings (basic/hra/da/specialAllowance/bonus) + 4 deductions (pf/pt/tds/loan)
+// Bugs #14-18: auto-fill employee details, correct calc, SA override, status labels
 function SalaryPage({ addToast, user }) {
-  const [salaries, setSalaries] = useState([]);
+  const [payslips, setPayslips] = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [modal, setModal]       = useState(false);
+  const [createModal, setCreateModal] = useState(false);
+  const [editModal, setEditModal]     = useState(null);
+  const [queryModal, setQueryModal]   = useState(null);
   const [payslipTarget, setPayslipTarget] = useState(null);
-  const [tab, setTab]           = useState("overview");
-  const [form, setForm] = useState({ userId: "", basicSalary: "", allowances: "", deductions: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(), notes: "" });
   const [users, setUsers]       = useState([]);
   const [saving, setSaving]     = useState(false);
   const [search, setSearch]     = useState("");
+  const [queryText, setQueryText] = useState("");
+
+  const blankForm = () => ({
+    userId: "",
+    month: new Date().getMonth() + 1,
+    year:  new Date().getFullYear(),
+    basic: 0, hra: 0, da: 0, specialAllowance: 0, bonus: 0,
+    pf: 0, pt: 200, tds: 0, loan: 0,
+    workingDays: 22, leaveDays: 0, overtimeHours: 0,
+    status: "draft",
+  });
+  const [form, setForm] = useState(blankForm());
 
   const load = async () => {
     setLoading(true);
     try {
-      const r = await apiFetch("/salaries"); const d = await r.json(); setSalaries(safeArr(d, "salaries", "data"));
-      if (isAdmin(user)) { const ur = await apiFetch("/users"); const ud = await ur.json(); setUsers(safeArr(ud, "users", "data")); }
-    } catch { addToast("Failed to load salaries", "error"); }
+      const r = await apiFetch("/payslips");
+      const d = await r.json();
+      setPayslips(safeArr(d, "payslips", "data"));
+      if (isAdmin(user)) {
+        const ur = await apiFetch("/users"); const ud = await ur.json();
+        setUsers(safeArr(ud, "users", "data"));
+      }
+    } catch { addToast("Failed to load payslips", "error"); }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
-  const handleSave = async () => {
-    if (!form.userId || !form.basicSalary) return addToast("Employee and salary required", "error");
+  // Bug #14: Auto-fill from selected user
+  const autoFillFromUser = (userId) => {
+    const u = users.find(x => x._id === userId);
+    if (!u) { setForm(p => ({ ...p, userId })); return; }
+    const base = Number(u.salary) || 0;
+    setForm(p => ({
+      ...p,
+      userId,
+      basic: Math.round(base * 0.50),
+      hra: Math.round(base * 0.20),
+      da: Math.round(base * 0.10),
+      specialAllowance: Math.round(base * 0.15),
+      bonus: Math.round(base * 0.05),
+      pf: Math.round(Math.round(base * 0.50) * 0.12),
+      pt: 200,
+      tds: Math.round(base * 0.05),
+      loan: 0,
+    }));
+  };
+
+  const computeTotals = (f) => {
+    const earnings = (Number(f.basic)||0) + (Number(f.hra)||0) + (Number(f.da)||0) + (Number(f.specialAllowance)||0) + (Number(f.bonus)||0);
+    const deductions = (Number(f.pf)||0) + (Number(f.pt)||0) + (Number(f.tds)||0) + (Number(f.loan)||0);
+    return { earnings, deductions, net: earnings - deductions };
+  };
+
+  const handleCreate = async () => {
+    if (!form.userId) return addToast("Select an employee", "error");
     setSaving(true);
     try {
-      const net = Number(form.basicSalary) + Number(form.allowances || 0) - Number(form.deductions || 0);
-      const month = `${form.year}-${String(form.month).padStart(2, "0")}`;
-      const r = await apiFetch("/salaries", { method: "POST", body: JSON.stringify({
-        user: form.userId, // backend expects 'user' not 'userId'
-        basicSalary: Number(form.basicSalary),
-        allowances: Number(form.allowances || 0),
-        deductions: Number(form.deductions || 0),
-        netSalary: net,
-        amount: net, // old salary model uses 'amount'
-        month,
-        notes: form.notes,
-        status: "pending",
-      }) });
-      if (!r.ok) { const d = await r.json(); throw new Error(d.message); }
-      addToast("Salary record created!", "success"); setModal(false);
-      setForm({ userId: "", basicSalary: "", allowances: "", deductions: "", month: new Date().getMonth() + 1, year: new Date().getFullYear(), notes: "" }); load();
-    } catch (e) { addToast(e.message || "Failed to create salary record", "error"); }
+      const r = await apiFetch("/payslips", { method: "POST", body: JSON.stringify(form) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || "Failed");
+      addToast("Payslip created", "success");
+      setCreateModal(false);
+      setForm(blankForm());
+      load();
+    } catch (e) { addToast(e.message || "Failed", "error"); }
+    setSaving(false);
+  };
+
+  const handleUpdate = async () => {
+    if (!editModal) return;
+    setSaving(true);
+    try {
+      const allowed = ["basic","hra","da","specialAllowance","bonus","pf","pt","tds","loan","workingDays","leaveDays","overtimeHours","status"];
+      const patch = {};
+      allowed.forEach(k => { if (editModal[k] !== undefined) patch[k] = editModal[k]; });
+      const r = await apiFetch(`/payslips/${editModal._id}`, { method: "PUT", body: JSON.stringify(patch) });
+      if (!r.ok) throw new Error();
+      addToast("Payslip updated", "success");
+      setEditModal(null);
+      load();
+    } catch { addToast("Failed", "error"); }
     setSaving(false);
   };
 
   const handleDelete = async (id) => {
-    try { await apiFetch(`/salaries/${id}`, { method: "DELETE" }); addToast("Record deleted", "success"); load(); }
-    catch { addToast("Failed", "error"); }
+    if (!confirm("Delete this payslip permanently?")) return;
+    try { await apiFetch(`/payslips/${id}`, { method: "DELETE" }); addToast("Deleted", "success"); load(); }
+    catch { addToast("Failed to delete", "error"); }
   };
 
-  const filtered = salaries.filter(s => !search || [s.userId?.name, s.notes].some(f => f?.toLowerCase().includes(search.toLowerCase())));
-  const totalPayroll = filtered.reduce((sum, s) => sum + Number(s.netSalary || s.totalSalary || 0), 0);
-  const paid = filtered.filter(s => s.status === "paid").length;
-  const pending = filtered.filter(s => s.status !== "paid").length;
-  const totalDeductions = filtered.reduce((sum, s) => sum + Number(s.deductions || 0), 0);
+  const handleQuery = async () => {
+    if (!queryText.trim()) return addToast("Please describe your query", "error");
+    try {
+      const r = await apiFetch(`/payslips/${queryModal._id}/query`, { method: "POST", body: JSON.stringify({ query: queryText }) });
+      if (!r.ok) throw new Error();
+      addToast("Query sent to Super Admin", "success");
+      setQueryModal(null);
+      setQueryText("");
+      load();
+    } catch { addToast("Failed to send query", "error"); }
+  };
 
-  // Payslip Modal
+  const filtered = payslips.filter(s => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return [s.user?.name, s.user?.employeeId, s.user?.department, MONTHS[(s.month||1)-1]].some(f => f?.toLowerCase().includes(q));
+  });
+
+  const totalPayroll = filtered.reduce((sum, s) => sum + Number(s.netPay || 0), 0);
+  const paid = filtered.filter(s => s.status === "paid").length;
+  const pending = filtered.filter(s => s.status === "draft" || s.status === "queried").length;
+  const totalDeductions = filtered.reduce((sum, s) => sum + Number(s.totalDeductions || 0), 0);
+
+  // ── PAYSLIP VIEW ──────────────────────────────────────────
   if (payslipTarget) {
-    const emp = users.find(u => u._id === (payslipTarget.userId?._id || payslipTarget.userId)) || payslipTarget.userId || {};
-    const basic = Number(payslipTarget.basicSalary || 0);
-    const hraAmt = Math.round(basic * 0.14);
-    const specialAllowance = Math.round(basic * 0.012);
-    const totalEarnings = basic + hraAmt + specialAllowance;
-    const pf = Math.round(basic * 0.058);
-    const profTax = 200;
-    const incomeTax = Math.round(basic * 0.05);
-    const totalDed = pf + profTax + incomeTax;
-    const netPay = Number(payslipTarget.netSalary || payslipTarget.totalSalary || totalEarnings - totalDed);
+    const emp = payslipTarget.user || {};
+    const totals = computeTotals(payslipTarget);
+    const earnings = payslipTarget.totalEarnings || totals.earnings;
+    const deductions = payslipTarget.totalDeductions || totals.deductions;
+    const netPay = payslipTarget.netPay || totals.net;
     return (
       <div className="scroll" style={{ padding: "24px 28px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
           <button onClick={() => setPayslipTarget(null)} className="btn-ghost" style={{ padding: "7px 14px", fontSize: 13, gap: 6 }}><ChevronLeft size={15} />Back</button>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.t3 }}>
-            <span style={{ cursor: "pointer", color: C.accent }} onClick={() => setPayslipTarget(null)}>Salary Management</span>
-            <ChevronRight size={12} /><span style={{ color: C.t2 }}>Payslip — {MONTHS[(payslipTarget.month||1)-1]} {payslipTarget.year}</span>
+            <span style={{ cursor: "pointer", color: C.accent }} onClick={() => setPayslipTarget(null)}>{isAdmin(user) ? "Salary Management" : "My Payslips"}</span>
+            <ChevronRight size={12} /><span style={{ color: C.t2 }}>{MONTHS[(payslipTarget.month||1)-1]} {payslipTarget.year}</span>
           </div>
-          <button className="btn-ghost" style={{ marginLeft: "auto", gap: 6, fontSize: 13 }} onClick={() => window.print()}><Upload size={14} />Download Payslip</button>
+          <button className="btn-ghost" style={{ marginLeft: "auto", gap: 6, fontSize: 13 }} onClick={() => window.print()}><Download size={14} />Print / Save PDF</button>
+          {!isAdmin(user) && payslipTarget.status !== "queried" && (
+            <button className="btn-ghost" style={{ gap: 6, fontSize: 13, color: C.amber, borderColor: C.amber + "44" }} onClick={() => { setQueryModal(payslipTarget); setQueryText(""); }}>
+              <AlertCircle size={14} />Raise Query
+            </button>
+          )}
         </div>
-        <div className="card fadeUp" style={{ maxWidth: 680, margin: "0 auto", padding: 32 }}>
-          {/* Header */}
+        <div className="card fadeUp" style={{ maxWidth: 720, margin: "0 auto", padding: 32 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, paddingBottom: 20, borderBottom: `1px solid ${C.border}` }}>
             <div style={{ display: "flex", gap: 12 }}>
-              <div style={{ width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg,${C.accent},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: "#fff" }}>N</div>
+              <img src="/icons/icon-192.png" alt="Nexus Pro" width={48} height={48} style={{ borderRadius: 14 }} />
               <div><h2 style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>Nexus Enterprises</h2><p style={{ fontSize: 12, color: C.t2 }}>Exporters Private Limited</p></div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <p style={{ fontSize: 15, fontWeight: 700, color: C.accent }}>PAYSLIP</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: C.gold }}>PAYSLIP</p>
               <p style={{ fontSize: 12, color: C.t2 }}>{MONTHS[(payslipTarget.month||1)-1]} {payslipTarget.year}</p>
             </div>
           </div>
-          {/* Employee Info */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
             <div>
               <p style={{ fontSize: 11, color: C.t3, marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em" }}>Employee Details</p>
-              {[{ l: "Employee", v: emp.name || payslipTarget.userId?.name || "—" }, { l: "Employee ID", v: emp.employeeId || "NEX-EMP-" + ((emp._id || payslipTarget.userId)?.slice(-4) || "0001") }, { l: "Designation", v: emp.position || "Employee" }, { l: "Department", v: emp.department || "—" }].map(f => (
+              {[
+                { l: "Name", v: emp.name || "—" },
+                { l: "Employee ID", v: emp.employeeId || "—" },
+                { l: "Designation", v: emp.position || emp.jobTitle || "—" },
+                { l: "Department", v: emp.department || "—" },
+              ].map(f => (
                 <div key={f.l} style={{ display: "flex", marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, color: C.t3, minWidth: 100 }}>{f.l}</span>
+                  <span style={{ fontSize: 12, color: C.t3, minWidth: 110 }}>{f.l}</span>
                   <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{f.v}</span>
                 </div>
               ))}
             </div>
             <div>
               <p style={{ fontSize: 11, color: C.t3, marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em" }}>Pay Details</p>
-              {[{ l: "Join Date", v: emp.joinDate ? new Date(emp.joinDate).toLocaleDateString("en-IN") : "—" }, { l: "Pay Period", v: `${MONTHS[(payslipTarget.month||1)-1]} ${payslipTarget.year}` }, { l: "Pay Date", v: payslipTarget.paidDate ? new Date(payslipTarget.paidDate).toLocaleDateString("en-IN") : "—" }, { l: "Status", v: payslipTarget.status || "pending" }].map(f => (
+              {[
+                { l: "Join Date", v: emp.joinDate ? new Date(emp.joinDate).toLocaleDateString("en-IN") : "—" },
+                { l: "Pay Period", v: `${MONTHS[(payslipTarget.month||1)-1]} ${payslipTarget.year}` },
+                { l: "Pay Date", v: payslipTarget.payDate ? new Date(payslipTarget.payDate).toLocaleDateString("en-IN") : "—" },
+                { l: "Working Days", v: `${payslipTarget.workingDays || "—"}${payslipTarget.leaveDays ? ` (${payslipTarget.leaveDays} leave)` : ""}` },
+                { l: "Status", v: payslipTarget.status || "draft" },
+              ].map(f => (
                 <div key={f.l} style={{ display: "flex", marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, color: C.t3, minWidth: 100 }}>{f.l}</span>
+                  <span style={{ fontSize: 12, color: C.t3, minWidth: 110 }}>{f.l}</span>
                   <span style={{ fontSize: 12, fontWeight: 600, color: C.t1, textTransform: "capitalize" }}>{f.v}</span>
                 </div>
               ))}
             </div>
           </div>
-          {/* Earnings & Deductions */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
             <div style={{ background: C.greenG, border: `1px solid ${C.green}22`, borderRadius: 12, padding: 16 }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 12, textTransform: "uppercase", letterSpacing: ".06em" }}>Earnings</p>
-              {[{ l: "Basic Salary", v: basic }, { l: "HRA", v: hraAmt }, { l: "Special Allowance", v: specialAllowance }].map(e => (
-                <div key={e.l} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              {[
+                { l: "Basic Salary",       v: payslipTarget.basic },
+                { l: "HRA",                v: payslipTarget.hra },
+                { l: "DA",                 v: payslipTarget.da },
+                { l: "Special Allowance",  v: payslipTarget.specialAllowance },
+                { l: "Bonus",              v: payslipTarget.bonus },
+              ].map(e => (
+                <div key={e.l} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, color: C.t2 }}>{e.l}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>₹{e.v.toLocaleString("en-IN")}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>₹{Number(e.v||0).toLocaleString("en-IN")}</span>
                 </div>
               ))}
-              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: `1px solid ${C.green}33` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, marginTop: 4, borderTop: `1px solid ${C.green}33` }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.green }}>Total Earnings</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: C.green }}>₹{totalEarnings.toLocaleString("en-IN")}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: C.green }}>₹{Number(earnings).toLocaleString("en-IN")}</span>
               </div>
             </div>
             <div style={{ background: C.redG, border: `1px solid ${C.red}22`, borderRadius: 12, padding: 16 }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 12, textTransform: "uppercase", letterSpacing: ".06em" }}>Deductions</p>
-              {[{ l: "PF", v: pf }, { l: "Professional Tax", v: profTax }, { l: "Income Tax", v: incomeTax }].map(d => (
-                <div key={d.l} style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              {[
+                { l: "PF",                v: payslipTarget.pf },
+                { l: "Professional Tax",  v: payslipTarget.pt },
+                { l: "Income Tax (TDS)",  v: payslipTarget.tds },
+                { l: "Loan / Advance",    v: payslipTarget.loan },
+              ].map(d => (
+                <div key={d.l} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, color: C.t2 }}>{d.l}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>₹{d.v.toLocaleString("en-IN")}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>₹{Number(d.v||0).toLocaleString("en-IN")}</span>
                 </div>
               ))}
-              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: `1px solid ${C.red}33` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, marginTop: 4, borderTop: `1px solid ${C.red}33` }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: C.red }}>Total Deductions</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: C.red }}>₹{totalDed.toLocaleString("en-IN")}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: C.red }}>₹{Number(deductions).toLocaleString("en-IN")}</span>
               </div>
             </div>
           </div>
-          {/* Net Salary */}
           <div style={{ background: `linear-gradient(135deg,${C.accent}22,${C.purple}22)`, border: `1px solid ${C.accent}33`, borderRadius: 14, padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: C.t1 }}>Net Salary</span>
-            <span style={{ fontSize: 28, fontWeight: 900, color: C.accent }}>₹{netPay.toLocaleString("en-IN")}</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: C.t1 }}>Net Pay</span>
+            <span style={{ fontSize: 28, fontWeight: 900, color: C.accent }}>₹{Number(netPay).toLocaleString("en-IN")}</span>
           </div>
+          {payslipTarget.query && (
+            <div style={{ marginTop: 16, padding: "12px 16px", background: C.amberG, border: `1px solid ${C.amber}33`, borderRadius: 10 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: C.amber, marginBottom: 4 }}>QUERY RAISED</p>
+              <p style={{ fontSize: 12, color: C.t2, lineHeight: 1.5 }}>{payslipTarget.query}</p>
+            </div>
+          )}
         </div>
+
+        <Modal open={!!queryModal} onClose={() => setQueryModal(null)} title="Raise a Query about this Payslip">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <p style={{ fontSize: 12, color: C.t2, lineHeight: 1.5 }}>Describe your concern. Super Admin will be notified and respond.</p>
+            <FormField label="Your Query">
+              <textarea className="inp" value={queryText} onChange={e => setQueryText(e.target.value)} rows={5} placeholder="e.g. The leave deduction looks incorrect..." style={{ resize: "vertical" }} />
+            </FormField>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn-ghost" onClick={() => setQueryModal(null)}>Cancel</button>
+              <button className="btn-pri" onClick={handleQuery}>Send Query</button>
+            </div>
+          </div>
+        </Modal>
       </div>
     );
   }
 
+  const totals = computeTotals(form);
+
   return (
-    <PageShell title="Salary Management" sub={isAdmin(user) ? `Total payroll: ₹${totalPayroll.toLocaleString("en-IN")}` : "Your salary history"}
+    <PageShell title={isAdmin(user) ? "Salary Management" : "My Payslips"} sub={isAdmin(user) ? `Total payroll: ₹${totalPayroll.toLocaleString("en-IN")}` : "Your payslip history"}
       actions={<>
-        {isAdmin(user) && (
-          <div style={{ display: "flex", gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}` }}>
-            {["overview","salary structures","allowance & deductions"].map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{ padding: "6px 12px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: tab === t ? C.accent : "transparent", color: tab === t ? "#fff" : C.t2, textTransform: "capitalize", whiteSpace: "nowrap" }}>{t}</button>
-            ))}
-          </div>
-        )}
-        {isAdmin(user) && <Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" icon={Search} style={{ width: 180 }} />}
-        {isAdmin(user) && <button className="btn-pri" onClick={() => setModal(true)}><Zap size={14} />Process Payroll</button>}
+        {isAdmin(user) && <Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or month…" icon={Search} style={{ width: 260 }} />}
+        {user?.role === "super_admin" && <button className="btn-pri" onClick={() => { setForm(blankForm()); setCreateModal(true); }}><Plus size={14} />Issue Payslip</button>}
       </>}
     >
-      {/* Stat Cards */}
       {isAdmin(user) && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
           {[
-            { label: "Total Payroll", value: `₹${totalPayroll.toLocaleString("en-IN")}`, sub: "This Month", color: C.accent, icon: Wallet },
-            { label: "Paid Employees", value: paid, sub: "This Month", color: C.green, icon: CheckCircle2 },
-            { label: "Pending Payments", value: pending, sub: "This Month", color: C.amber, icon: Clock },
-            { label: "Total Deductions", value: `₹${totalDeductions.toLocaleString("en-IN")}`, sub: "This Month", color: C.red, icon: AlertCircle },
+            { label: "Total Payroll", value: `₹${totalPayroll.toLocaleString("en-IN")}`, sub: "Filtered", color: C.accent, icon: Wallet },
+            { label: "Paid",          value: paid,    sub: "Slips",   color: C.green,  icon: CheckCircle2 },
+            { label: "Pending",       value: pending, sub: "Slips",   color: C.amber,  icon: Clock },
+            { label: "Total Deductions", value: `₹${totalDeductions.toLocaleString("en-IN")}`, sub: "Filtered", color: C.red,    icon: AlertCircle },
           ].map(s => (
             <div key={s.label} className="card" style={{ padding: "18px 20px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -3394,69 +3691,144 @@ function SalaryPage({ addToast, user }) {
         </div>
       )}
 
-      {/* Recent Payroll label for admin */}
-      {isAdmin(user) && <p style={{ fontSize: 13, fontWeight: 700, color: C.t1, marginBottom: 12 }}>Recent Payroll</p>}
-
       <Table loading={loading} columns={[
-        { key: "userId",      label: "Employee",    render: (v, row) => (
+        { key: "user", label: "Employee", render: (v, row) => (
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: C.accent }}>{(v?.name || "?")[0]?.toUpperCase()}</div>
-            <span style={{ fontWeight: 600, fontSize: 13 }}>{v?.name || "—"}</span>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: C.accent }}>{(v?.name || user?.name || "?")[0]?.toUpperCase()}</div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{v?.name || user?.name || "—"}</div>
+              {v?.employeeId && <div style={{ fontSize: 10, color: C.t3 }}>{v.employeeId}</div>}
+            </div>
           </div>
         )},
-        { key: "month",       label: "Month",       render: (v, row) => <span style={{ color: C.t2 }}>{MONTHS[(v||1)-1]} {row.year}</span> },
-        { key: "basicSalary", label: "Basic (₹)",   render: v => <span style={{ color: C.t1, fontWeight: 600 }}>₹{Number(v||0).toLocaleString("en-IN")}</span> },
-        { key: "allowances",  label: "Allowances",  render: v => <span style={{ color: C.green }}>+₹{Number(v||0).toLocaleString("en-IN")}</span> },
-        { key: "deductions",  label: "Deductions",  render: v => <span style={{ color: C.red }}>-₹{Number(v||0).toLocaleString("en-IN")}</span> },
-        { key: "netSalary",   label: "Net Pay",     render: (v, row) => <span style={{ color: C.accent, fontWeight: 700, fontSize: 14 }}>₹{Number(v||row.totalSalary||0).toLocaleString("en-IN")}</span> },
-        { key: "status",      label: "Status",      render: v => statusBadge(v || "pending") },
+        { key: "month", label: "Period", render: (v, row) => <span style={{ color: C.t2, fontSize: 12 }}>{MONTHS[(v||1)-1]} {row.year}</span> },
+        { key: "totalEarnings", label: "Earnings",   render: v => <span style={{ color: C.green, fontWeight: 600, fontSize: 12 }}>₹{Number(v||0).toLocaleString("en-IN")}</span> },
+        { key: "totalDeductions", label: "Deductions",  render: v => <span style={{ color: C.red, fontSize: 12 }}>-₹{Number(v||0).toLocaleString("en-IN")}</span> },
+        { key: "netPay", label: "Net Pay", render: v => <span style={{ color: C.accent, fontWeight: 800, fontSize: 14 }}>₹{Number(v||0).toLocaleString("en-IN")}</span> },
+        { key: "status", label: "Status", render: v => statusBadge(v || "draft") },
         { key: "_id", label: "Actions", render: (v, row) => (
           <div style={{ display: "flex", gap: 5 }}>
             <button className="btn-icon" title="View Payslip" style={{ background: C.accentG, color: C.accent, width: 28, height: 28 }} onClick={() => setPayslipTarget(row)}><FileText size={12} /></button>
-            {isAdmin(user) && <button className="btn-icon" style={{ background: C.redG, color: C.red, width: 28, height: 28 }} onClick={() => handleDelete(v)}><Trash2 size={12} /></button>}
+            {user?.role === "super_admin" && (
+              <>
+                <button className="btn-icon" title="Edit (override)" style={{ background: C.amberG, color: C.amber, width: 28, height: 28 }} onClick={() => setEditModal({ ...row })}><Edit2 size={12} /></button>
+                <button className="btn-icon" title="Delete" style={{ background: C.redG, color: C.red, width: 28, height: 28 }} onClick={() => handleDelete(v)}><Trash2 size={12} /></button>
+              </>
+            )}
           </div>
         )},
-      ]} rows={filtered} emptyText="No salary records" />
+      ]} rows={filtered} emptyText="No payslips yet" />
 
-      <Modal open={modal} onClose={() => setModal(false)} title="Add Salary Record">
+      <Modal open={createModal} onClose={() => setCreateModal(false)} title="Issue New Payslip" width={620}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <FormField label="Employee">
-            <select value={form.userId} onChange={e => setForm(p => ({ ...p, userId: e.target.value }))} className="inp">
-              <option value="">Select employee…</option>
-              {users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+            <select value={form.userId} onChange={e => autoFillFromUser(e.target.value)} className="inp">
+              <option value="">Select employee… (auto-fills from base salary)</option>
+              {users.filter(u => u.role === "employee" || u.role === "admin").map(u => (
+                <option key={u._id} value={u._id}>
+                  {u.name} {u.employeeId ? `(${u.employeeId})` : ""} — Base ₹{Number(u.salary||0).toLocaleString("en-IN")}
+                </option>
+              ))}
             </select>
           </FormField>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
             <FormField label="Month">
               <select value={form.month} onChange={e => setForm(p => ({ ...p, month: Number(e.target.value) }))} className="inp">
                 {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
               </select>
             </FormField>
-            <FormField label="Year"><Inp value={form.year} onChange={e => setForm(p => ({ ...p, year: e.target.value }))} type="number" /></FormField>
+            <FormField label="Year"><Inp value={form.year} onChange={e => setForm(p => ({ ...p, year: Number(e.target.value) }))} type="number" /></FormField>
+            <FormField label="Status">
+              <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} className="inp">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="paid">Paid</option>
+              </select>
+            </FormField>
           </div>
-          <FormField label="Basic Salary (₹)"><Inp value={form.basicSalary} onChange={e => setForm(p => ({ ...p, basicSalary: e.target.value }))} placeholder="e.g. 85000" type="number" /></FormField>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormField label="Allowances (₹)"><Inp value={form.allowances} onChange={e => setForm(p => ({ ...p, allowances: e.target.value }))} placeholder="0" type="number" /></FormField>
-            <FormField label="Deductions (₹)"><Inp value={form.deductions} onChange={e => setForm(p => ({ ...p, deductions: e.target.value }))} placeholder="0" type="number" /></FormField>
-          </div>
-          {form.basicSalary && (
-            <div style={{ background: C.accentG, border: `1px solid ${C.accent}28`, borderRadius: 10, padding: "10px 14px" }}>
-              <p style={{ fontSize: 12, color: C.t2 }}>Net Pay Preview</p>
-              <p style={{ fontSize: 18, fontWeight: 800, color: C.accent }}>
-                ₹{(Number(form.basicSalary||0) + Number(form.allowances||0) - Number(form.deductions||0)).toLocaleString("en-IN")}
-              </p>
+          <div style={{ padding: 14, background: "rgba(34,197,94,0.05)", border: `1px solid ${C.green}22`, borderRadius: 10 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>Earnings (Override Auto-Fill)</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[["basic","Basic"],["hra","HRA"],["da","DA"],["specialAllowance","Special Allowance"],["bonus","Bonus"]].map(([k, l]) => (
+                <FormField key={k} label={l}><Inp value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="number" /></FormField>
+              ))}
             </div>
-          )}
-          <FormField label="Notes"><Inp value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Optional notes…" /></FormField>
+          </div>
+          <div style={{ padding: 14, background: "rgba(239,68,68,0.05)", border: `1px solid ${C.red}22`, borderRadius: 10 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>Deductions (Override Auto-Fill)</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {[["pf","PF"],["pt","Professional Tax"],["tds","Income Tax (TDS)"],["loan","Loan / Advance"]].map(([k, l]) => (
+                <FormField key={k} label={l}><Inp value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="number" /></FormField>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+            <FormField label="Working Days"><Inp value={form.workingDays} onChange={e => setForm(p => ({ ...p, workingDays: Number(e.target.value)||0 }))} type="number" /></FormField>
+            <FormField label="Leave Days"><Inp value={form.leaveDays} onChange={e => setForm(p => ({ ...p, leaveDays: Number(e.target.value)||0 }))} type="number" /></FormField>
+            <FormField label="Overtime Hours"><Inp value={form.overtimeHours} onChange={e => setForm(p => ({ ...p, overtimeHours: Number(e.target.value)||0 }))} type="number" /></FormField>
+          </div>
+          <div style={{ background: `linear-gradient(135deg,${C.accent}22,${C.purple}22)`, border: `1px solid ${C.accent}33`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <p style={{ fontSize: 11, color: C.t2 }}>Net Pay Preview</p>
+              <p style={{ fontSize: 11, color: C.t3 }}>₹{totals.earnings.toLocaleString("en-IN")} − ₹{totals.deductions.toLocaleString("en-IN")}</p>
+            </div>
+            <p style={{ fontSize: 22, fontWeight: 900, color: C.accent }}>₹{totals.net.toLocaleString("en-IN")}</p>
+          </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button className="btn-ghost" onClick={() => setModal(false)}>Cancel</button>
-            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Create Record"}</button>
+            <button className="btn-ghost" onClick={() => setCreateModal(false)}>Cancel</button>
+            <button className="btn-pri" onClick={handleCreate} disabled={saving}>{saving ? "Issuing…" : "Issue Payslip"}</button>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={!!editModal} onClose={() => setEditModal(null)} title="Edit Payslip (Super Admin Override)" width={620}>
+        {editModal && (() => {
+          const t = computeTotals(editModal);
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ padding: "10px 14px", background: C.accentG, borderRadius: 8, fontSize: 12, color: C.accent }}>
+                Editing payslip for <strong>{editModal.user?.name}</strong> · {MONTHS[(editModal.month||1)-1]} {editModal.year}
+              </div>
+              <div style={{ padding: 14, background: "rgba(34,197,94,0.05)", border: `1px solid ${C.green}22`, borderRadius: 10 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 10, textTransform: "uppercase" }}>Earnings</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {[["basic","Basic"],["hra","HRA"],["da","DA"],["specialAllowance","Special Allowance"],["bonus","Bonus"]].map(([k, l]) => (
+                    <FormField key={k} label={l}><Inp value={editModal[k]||0} onChange={e => setEditModal(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="number" /></FormField>
+                  ))}
+                </div>
+              </div>
+              <div style={{ padding: 14, background: "rgba(239,68,68,0.05)", border: `1px solid ${C.red}22`, borderRadius: 10 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 10, textTransform: "uppercase" }}>Deductions</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {[["pf","PF"],["pt","Professional Tax"],["tds","TDS"],["loan","Loan"]].map(([k, l]) => (
+                    <FormField key={k} label={l}><Inp value={editModal[k]||0} onChange={e => setEditModal(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="number" /></FormField>
+                  ))}
+                </div>
+              </div>
+              <FormField label="Status">
+                <select value={editModal.status||"draft"} onChange={e => setEditModal(p => ({ ...p, status: e.target.value }))} className="inp">
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="queried">Queried</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </FormField>
+              <div style={{ background: C.accentG, border: `1px solid ${C.accent}33`, borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.t1 }}>Net Pay</span>
+                <span style={{ fontSize: 20, fontWeight: 800, color: C.accent }}>₹{t.net.toLocaleString("en-IN")}</span>
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button className="btn-ghost" onClick={() => setEditModal(null)}>Cancel</button>
+                <button className="btn-pri" onClick={handleUpdate} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </PageShell>
   );
 }
+
 
 // ─── BUYERS ───────────────────────────────────────────────────────────────────
 function BuyersPage({ addToast }) {
@@ -3971,65 +4343,214 @@ function AuditPage({ addToast }) {
 
 // ─── PROFILE ──────────────────────────────────────────────────────────────────
 function ProfilePage({ addToast, user }) {
-  const [form, setForm] = useState({ name: user?.name || "", email: user?.email || "", phone: user?.phone || "", position: user?.position || "", department: user?.department || "" });
+  const [me, setMe] = useState(null);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", position: "", department: "", employeeId: "", joinDate: "" });
   const [saving, setSaving] = useState(false);
   const [pwForm, setPwForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [pwSaving, setPwSaving] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [sessLoading, setSessLoading] = useState(true);
 
+  // Load fresh /auth/me on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await apiFetch("/auth/me");
+        const d = await r.json();
+        const u = d.user || d;
+        setMe(u);
+        setForm({
+          name: u?.name || "",
+          email: u?.email || "",
+          phone: u?.phone || "",
+          position: u?.position || u?.jobTitle || "",
+          department: u?.department || "",
+          employeeId: u?.employeeId || "",
+          joinDate: u?.joinDate ? new Date(u.joinDate).toISOString().split("T")[0] : "",
+        });
+      } catch { /* fall back to cached user */
+        setMe(user);
+        setForm({
+          name: user?.name || "", email: user?.email || "", phone: user?.phone || "",
+          position: user?.position || "", department: user?.department || "",
+          employeeId: user?.employeeId || "",
+          joinDate: user?.joinDate ? new Date(user.joinDate).toISOString().split("T")[0] : "",
+        });
+      }
+    })();
+  }, []);
+
+  const loadSessions = async () => {
+    setSessLoading(true);
+    try {
+      const r = await apiFetch("/auth/sessions");
+      const d = await r.json();
+      setSessions(d.sessions || []);
+    } catch { /* silent */ }
+    setSessLoading(false);
+  };
+  useEffect(() => { loadSessions(); }, []);
+
+  // Bug #1: Fixed endpoint — /auth/profile (not /users/profile), whitelist fields
   const handleSave = async () => {
     setSaving(true);
     try {
-      const r = await apiFetch("/users/profile", { method: "PUT", body: JSON.stringify(form) });
-      if (!r.ok) throw new Error();
+      const r = await apiFetch("/auth/profile", {
+        method: "PUT",
+        body: JSON.stringify({ name: form.name, phone: form.phone })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || "Update failed");
+      // Refresh local user copy
+      if (d.user) {
+        const merged = { ...JSON.parse(localStorage.getItem("ems_user") || "{}"), ...d.user };
+        localStorage.setItem("ems_user", JSON.stringify(merged));
+      }
       addToast("Profile updated!", "success");
-    } catch { addToast("Failed to update", "error"); }
+    } catch (e) { addToast(e.message || "Failed to update", "error"); }
     setSaving(false);
   };
 
+  // Bug #2: Change password endpoint exists now in backend; bumps tokenVersion (force-logout-all)
   const handlePw = async () => {
-    if (pwForm.newPassword !== pwForm.confirmPassword) return addToast("Passwords don't match", "error");
-    if (pwForm.newPassword.length < 6) return addToast("Password must be at least 6 characters", "error");
+    if (!pwForm.currentPassword) return addToast("Enter your current password", "error");
+    if (pwForm.newPassword !== pwForm.confirmPassword) return addToast("New passwords don't match", "error");
+    if (pwForm.newPassword.length < 8) return addToast("Password must be at least 8 characters", "error");
     setPwSaving(true);
     try {
-      const r = await apiFetch("/auth/change-password", { method: "POST", body: JSON.stringify(pwForm) });
-      if (!r.ok) throw new Error();
-      addToast("Password changed!", "success"); setPwForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-    } catch { addToast("Failed to change password", "error"); }
+      const r = await apiFetch("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword: pwForm.currentPassword, newPassword: pwForm.newPassword })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || "Failed");
+      addToast("Password changed. You'll be signed out from other devices on next request.", "success");
+      setPwForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      // Reload sessions list
+      loadSessions();
+    } catch (e) { addToast(e.message || "Failed to change password", "error"); }
     setPwSaving(false);
   };
 
+  const revokeSession = async (id) => {
+    if (!confirm("Sign out this session?")) return;
+    try {
+      const r = await apiFetch(`/auth/sessions/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      addToast("Session revoked", "success");
+      loadSessions();
+    } catch { addToast("Failed to revoke", "error"); }
+  };
+
+  const revokeAllOthers = async () => {
+    if (!confirm("Sign out from all other devices?")) return;
+    try {
+      const r = await apiFetch(`/auth/sessions/all-others`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      addToast("Signed out from all other devices", "success");
+      loadSessions();
+    } catch { addToast("Failed", "error"); }
+  };
+
   return (
-    <PageShell title="Profile" sub="Manage your account">
+    <PageShell title="My Profile" sub="Manage your account, security, and active sessions">
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
         <div>
           <div className="card" style={{ padding: 24, marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
               <div style={{ width: 64, height: 64, borderRadius: 18, background: `linear-gradient(135deg,${C.accent},${C.purple})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800, color: "#fff" }}>
-                {(user?.name?.[0] || "A").toUpperCase()}
+                {(form.name?.[0] || "A").toUpperCase()}
               </div>
               <div>
-                <h2 style={{ fontSize: 18, fontWeight: 800, color: C.t1 }}>{user?.name}</h2>
-                <p style={{ fontSize: 13, color: C.t2 }}>{user?.email}</p>
-                <div style={{ marginTop: 6 }}>{roleBadge(user?.role)}</div>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: C.t1 }}>{form.name || "—"}</h2>
+                <p style={{ fontSize: 13, color: C.t2 }}>{form.email}</p>
+                <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
+                  {roleBadge(me?.role || user?.role)}
+                  {form.employeeId && <span style={{ fontSize: 10, color: C.t3, background: "rgba(255,255,255,0.04)", padding: "2px 7px", borderRadius: 6, fontWeight: 600 }}>{form.employeeId}</span>}
+                </div>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {[{ key:"name",label:"Full Name" },{ key:"email",label:"Email",type:"email" },{ key:"phone",label:"Phone" },{ key:"position",label:"Position" },{ key:"department",label:"Department" }].map(f => (
-                <FormField key={f.key} label={f.label}><Inp value={form[f.key] || ""} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} type={f.type} /></FormField>
-              ))}
+              <FormField label="Full Name"><Inp value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></FormField>
+              <FormField label="Email (read-only)"><Inp value={form.email} disabled /></FormField>
+              <FormField label="Phone"><Inp value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+91 90000 00000" /></FormField>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <FormField label="Department (read-only)"><Inp value={form.department} disabled /></FormField>
+                <FormField label="Position (read-only)"><Inp value={form.position} disabled /></FormField>
+              </div>
+              {form.employeeId && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <FormField label="Employee ID (read-only)"><Inp value={form.employeeId} disabled /></FormField>
+                  <FormField label="Join Date (read-only)"><Inp value={form.joinDate} disabled /></FormField>
+                </div>
+              )}
               <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Update Profile"}</button>
             </div>
           </div>
         </div>
-        <div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Change Password */}
           <div className="card" style={{ padding: 24 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 18 }}>Change Password</h2>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+              <Lock size={16} color={C.accent} /> Change Password
+            </h2>
+            <p style={{ fontSize: 11, color: C.t3, marginBottom: 18 }}>Changing your password will sign you out from all other devices.</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <FormField label="Current Password"><Inp value={pwForm.currentPassword} onChange={e => setPwForm(p => ({ ...p, currentPassword: e.target.value }))} type="password" placeholder="••••••••" /></FormField>
-              <FormField label="New Password"><Inp value={pwForm.newPassword} onChange={e => setPwForm(p => ({ ...p, newPassword: e.target.value }))} type="password" placeholder="••••••••" /></FormField>
-              <FormField label="Confirm Password"><Inp value={pwForm.confirmPassword} onChange={e => setPwForm(p => ({ ...p, confirmPassword: e.target.value }))} type="password" placeholder="••••••••" /></FormField>
+              <FormField label="Current Password">
+                <Inp value={pwForm.currentPassword} onChange={e => setPwForm(p => ({ ...p, currentPassword: e.target.value }))} type="password" placeholder="••••••••" autoComplete="current-password" showToggle />
+              </FormField>
+              <FormField label="New Password (min 8 chars)">
+                <Inp value={pwForm.newPassword} onChange={e => setPwForm(p => ({ ...p, newPassword: e.target.value }))} type="password" placeholder="••••••••" autoComplete="new-password" showToggle />
+              </FormField>
+              <FormField label="Confirm New Password">
+                <Inp value={pwForm.confirmPassword} onChange={e => setPwForm(p => ({ ...p, confirmPassword: e.target.value }))} type="password" placeholder="••••••••" autoComplete="new-password" showToggle />
+              </FormField>
               <button className="btn-pri" onClick={handlePw} disabled={pwSaving}>{pwSaving ? "Changing…" : "Change Password"}</button>
             </div>
+          </div>
+
+          {/* Active Sessions */}
+          <div className="card" style={{ padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1, display: "flex", alignItems: "center", gap: 8 }}>
+                <Shield size={16} color={C.accent} /> Active Sessions
+              </h2>
+              {sessions.length > 1 && (
+                <button onClick={revokeAllOthers} className="btn-danger" style={{ fontSize: 11 }}>Sign out all others</button>
+              )}
+            </div>
+            {sessLoading ? <Sk h={70} /> : sessions.length === 0 ? (
+              <p style={{ fontSize: 12, color: C.t3, textAlign: "center", padding: "20px 0" }}>No active sessions</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {sessions.map(s => {
+                  const isMobile = /iPhone|Android|iPad/.test(s.device || "");
+                  const Icon = isMobile ? Smartphone : Monitor;
+                  return (
+                    <div key={s.id} style={{ padding: "10px 14px", border: `1px solid ${s.current ? C.accent + "55" : C.border}`, background: s.current ? C.accentG : "rgba(255,255,255,0.02)", borderRadius: 10, display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, background: s.current ? C.accent + "33" : "rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Icon size={16} color={s.current ? C.accent : C.t2} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.t1, display: "flex", alignItems: "center", gap: 8 }}>
+                          {s.device || "Unknown device"}
+                          {s.current && <span style={{ fontSize: 9, color: C.accent, background: C.accent + "22", padding: "1px 6px", borderRadius: 4, fontWeight: 700 }}>THIS DEVICE</span>}
+                        </div>
+                        <div style={{ fontSize: 10, color: C.t3, marginTop: 2 }}>
+                          {s.ip || "—"} · last active {s.lastSeenAt ? new Date(s.lastSeenAt).toLocaleString() : "—"}
+                        </div>
+                      </div>
+                      {!s.current && (
+                        <button onClick={() => revokeSession(s.id)} className="btn-icon" style={{ background: C.redG, color: C.red }} title="Sign out this session">
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -4085,7 +4606,12 @@ function DepartmentsPage({ addToast, user }) {
     catch { addToast("Failed to delete", "error"); }
   };
 
-  const filtered = depts.filter(d => !search || d.name?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = depts.filter(d => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    const headObj = d.headId && typeof d.headId === "object" ? d.headId : (d.head && typeof d.head === "object" ? d.head : null);
+    return [d.name, d.description, headObj?.name].some(f => f?.toLowerCase().includes(q));
+  });
   const deptColors = [C.accent, C.green, C.amber, C.blue, C.purple, C.cyan, C.red, C.orange];
 
   return (
@@ -5141,8 +5667,11 @@ function AnnouncementsPage({ addToast, user }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ title: "", content: "", priority: "normal", targetRole: "all" });
+  const [form, setForm] = useState({ title: "", content: "", category: "general", priority: "normal", targetRole: "all" });
   const [saving, setSaving] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("all");
+
+  const myId = user?.id || user?._id;
 
   const load = async () => {
     setLoading(true);
@@ -5152,6 +5681,11 @@ function AnnouncementsPage({ addToast, user }) {
   };
   useEffect(() => { load(); }, []);
 
+  // Mark as read when card comes into view (simple: mark on click/expand)
+  const markRead = async (id) => {
+    try { await apiFetch(`/announcements/${id}/read`, { method: "POST" }); } catch {}
+  };
+
   const handleSave = async () => {
     if (!form.title || !form.content) return addToast("Title and content required", "error");
     setSaving(true);
@@ -5159,7 +5693,7 @@ function AnnouncementsPage({ addToast, user }) {
       const r = await apiFetch("/announcements", { method: "POST", body: JSON.stringify(form) });
       if (!r.ok) throw new Error();
       addToast("Announcement posted!", "success"); setModal(false);
-      setForm({ title: "", content: "", priority: "normal", targetRole: "all" }); load();
+      setForm({ title: "", content: "", category: "general", priority: "normal", targetRole: "all" }); load();
     } catch { addToast("Failed to post", "error"); }
     setSaving(false);
   };
@@ -5172,49 +5706,101 @@ function AnnouncementsPage({ addToast, user }) {
   const priorityColor = p => p === "urgent" ? C.red : p === "high" ? C.amber : p === "normal" ? C.accent : C.t2;
   const priorityBg = p => p === "urgent" ? C.redG : p === "high" ? C.amberG : p === "normal" ? C.accentG : "rgba(255,255,255,0.04)";
 
+  // Bug #28: Category tabs
+  const CATEGORIES = [
+    { id: "all",     label: "All",      icon: Megaphone, color: C.t2 },
+    { id: "general", label: "General",  icon: Bell,      color: C.accent },
+    { id: "urgent",  label: "Urgent",   icon: AlertCircle, color: C.red },
+    { id: "hr",      label: "HR",       icon: Users,     color: C.green },
+    { id: "holiday", label: "Holidays", icon: Calendar,  color: C.amber },
+    { id: "policy",  label: "Policies", icon: Shield,    color: C.purple },
+  ];
+
+  const filtered = announcements.filter(a => activeCategory === "all" || a.category === activeCategory);
+  const counts = CATEGORIES.reduce((acc, c) => {
+    acc[c.id] = c.id === "all" ? announcements.length : announcements.filter(a => a.category === c.id).length;
+    return acc;
+  }, {});
+
   return (
     <PageShell title="Announcements" sub="Company-wide communications"
       actions={isAdmin(user) ? <button className="btn-pri" onClick={() => setModal(true)}><Plus size={14} />Post Announcement</button> : null}
     >
+      {/* Category tabs */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 18, overflowX: "auto", paddingBottom: 4 }}>
+        {CATEGORIES.map(cat => {
+          const Icon = cat.icon;
+          const isActive = activeCategory === cat.id;
+          return (
+            <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
+              style={{ padding: "8px 14px", borderRadius: 10, border: `1px solid ${isActive ? cat.color + "55" : C.border}`, cursor: "pointer", fontSize: 12, fontWeight: 600, background: isActive ? cat.color + "22" : "rgba(255,255,255,0.02)", color: isActive ? cat.color : C.t2, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", transition: "all .15s" }}>
+              <Icon size={13} /> {cat.label}
+              <span style={{ background: isActive ? cat.color + "33" : "rgba(255,255,255,0.05)", padding: "1px 7px", borderRadius: 12, fontSize: 10, fontWeight: 700 }}>{counts[cat.id] || 0}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {loading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>{Array(4).fill(0).map((_, i) => <Sk key={i} h={120} />)}</div>
-      ) : announcements.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="card" style={{ padding: 60, textAlign: "center" }}>
           <Bell size={32} color={C.t3} style={{ marginBottom: 12 }} />
-          <p style={{ color: C.t2, fontSize: 14 }}>No announcements yet</p>
-          {isAdmin(user) && <button className="btn-pri" style={{ marginTop: 16 }} onClick={() => setModal(true)}><Plus size={14} />Create First Announcement</button>}
+          <p style={{ color: C.t2, fontSize: 14 }}>No announcements in this category</p>
+          {isAdmin(user) && activeCategory === "all" && <button className="btn-pri" style={{ marginTop: 16 }} onClick={() => setModal(true)}><Plus size={14} />Create First Announcement</button>}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {announcements.map((ann, i) => (
-            <div key={ann._id || i} className="card" style={{ padding: 22, borderLeft: `4px solid ${priorityColor(ann.priority)}` }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: priorityBg(ann.priority), color: priorityColor(ann.priority), textTransform: "uppercase" }}>{ann.priority || "normal"}</span>
-                    {ann.targetRole && ann.targetRole !== "all" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: C.blueG, color: C.blue, textTransform: "uppercase" }}>{ann.targetRole}</span>}
-                    <span style={{ fontSize: 11, color: C.t3 }}>{ann.createdAt ? new Date(ann.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "Recently"}</span>
-                  </div>
-                  <h3 style={{ fontSize: 15, fontWeight: 700, color: C.t1, marginBottom: 8 }}>{ann.title}</h3>
-                  <p style={{ fontSize: 13, color: C.t2, lineHeight: 1.7 }}>{ann.content}</p>
-                  {ann.createdBy && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
-                      <div style={{ width: 24, height: 24, borderRadius: 7, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: C.accent }}>{(ann.createdBy?.name || ann.createdBy)?.[0]?.toUpperCase()}</div>
-                      <span style={{ fontSize: 12, color: C.t3 }}>Posted by {ann.createdBy?.name || ann.createdBy || "Admin"}</span>
+          {filtered.map((ann, i) => {
+            const isRead = (ann.readBy || []).some(id => id === myId || id?._id === myId);
+            const cat = CATEGORIES.find(c => c.id === ann.category) || CATEGORIES[1];
+            return (
+              <div key={ann._id || i} className="card" style={{ padding: 22, borderLeft: `4px solid ${priorityColor(ann.priority)}`, position: "relative" }}
+                onClick={() => !isRead && ann._id && markRead(ann._id)}>
+                {!isRead && <span style={{ position: "absolute", top: 16, right: 16, width: 8, height: 8, borderRadius: "50%", background: C.accent, animation: "blink 2s infinite" }} title="Unread" />}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: priorityBg(ann.priority), color: priorityColor(ann.priority), textTransform: "uppercase" }}>{ann.priority || "normal"}</span>
+                      {ann.category && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: cat.color + "22", color: cat.color, textTransform: "uppercase" }}>{cat.label}</span>}
+                      {ann.targetRole && ann.targetRole !== "all" && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: C.blueG, color: C.blue, textTransform: "uppercase" }}>{ann.targetRole}</span>}
+                      <span style={{ fontSize: 11, color: C.t3 }}>{ann.createdAt ? new Date(ann.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "Recently"}</span>
                     </div>
-                  )}
+                    <h3 style={{ fontSize: 15, fontWeight: 700, color: C.t1, marginBottom: 8 }}>{ann.title}</h3>
+                    <p style={{ fontSize: 13, color: C.t2, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{ann.content}</p>
+                    {(ann.postedBy || ann.createdBy) && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: 7, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: C.accent }}>
+                          {((ann.postedBy?.name || ann.createdBy?.name || "A"))[0]?.toUpperCase()}
+                        </div>
+                        <span style={{ fontSize: 12, color: C.t3 }}>
+                          Posted by {ann.postedBy?.name || ann.createdBy?.name || "Admin"}
+                          {ann.postedBy?.jobTitle && <span style={{ color: C.t3 }}> · {ann.postedBy.jobTitle}</span>}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {isAdmin(user) && <button className="btn-icon" style={{ background: C.redG, color: C.red, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); handleDelete(ann._id); }}><Trash2 size={12} /></button>}
                 </div>
-                {isAdmin(user) && <button className="btn-icon" style={{ background: C.redG, color: C.red, flexShrink: 0 }} onClick={() => handleDelete(ann._id)}><Trash2 size={12} /></button>}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       <Modal open={modal} onClose={() => setModal(false)} title="Post Announcement" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <FormField label="Title"><Inp value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Announcement title..." /></FormField>
           <FormField label="Content"><textarea className="inp" value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))} placeholder="Write your announcement here..." rows={5} style={{ resize: "vertical" }} /></FormField>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <FormField label="Category">
+              <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className="inp">
+                <option value="general">General</option>
+                <option value="urgent">Urgent</option>
+                <option value="hr">HR</option>
+                <option value="holiday">Holiday</option>
+                <option value="policy">Policy</option>
+              </select>
+            </FormField>
             <FormField label="Priority"><select value={form.priority} onChange={e => setForm(p => ({ ...p, priority: e.target.value }))} className="inp"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></FormField>
             <FormField label="Target"><select value={form.targetRole} onChange={e => setForm(p => ({ ...p, targetRole: e.target.value }))} className="inp"><option value="all">All Employees</option><option value="admin">Admins Only</option><option value="employee">Employees Only</option></select></FormField>
           </div>
@@ -5231,6 +5817,7 @@ function AnnouncementsPage({ addToast, user }) {
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 function LoginPage({ onLogin }) {
   const [form, setForm] = useState({ email: "", password: "" });
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showForgot, setShowForgot] = useState(false);
@@ -5241,11 +5828,16 @@ function LoginPage({ onLogin }) {
     if (!form.email || !form.password) return setError("Please fill in all fields");
     setLoading(true); setError("");
     try {
-      const r = await fetch(`${API}/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      const r = await fetch(`${API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, rememberMe }),
+      });
       const d = await r.json();
       if (!r.ok) throw new Error(d.message || "Invalid credentials");
       localStorage.setItem("ems_token", d.token || d.accessToken || "");
       localStorage.setItem("ems_user", JSON.stringify(d.user || { name: "Admin", email: form.email }));
+      localStorage.setItem("ems_remember", rememberMe ? "1" : "0");
       onLogin(d.user || { name: "Admin", email: form.email });
     } catch (e) { setError(e.message || "Login failed"); }
     setLoading(false);
@@ -5260,28 +5852,42 @@ function LoginPage({ onLogin }) {
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: `radial-gradient(ellipse at 30% 20%, rgba(99,102,241,0.15) 0%, transparent 55%), radial-gradient(ellipse at 75% 80%, rgba(168,85,247,0.1) 0%, transparent 55%), ${C.bg}` }}>
       <div className="fadeUp" style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 20, background: `linear-gradient(135deg,${C.accent},${C.purple})`, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 16, boxShadow: `0 8px 32px rgba(99,102,241,0.5)` }}>
-            <Building2 size={28} color="#fff" />
-          </div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: C.t1, letterSpacing: "-.02em", marginBottom: 6 }}>Nexus Portal</h1>
-          <p style={{ fontSize: 13, color: C.t2 }}>Sign in to your workspace</p>
+          <img src="/icons/icon-192.png" alt="Nexus Pro" width={72} height={72}
+            style={{ borderRadius: 18, marginBottom: 16, boxShadow: "0 8px 32px rgba(212,162,76,0.35)" }} />
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: C.t1, letterSpacing: "-.02em", marginBottom: 6 }}>Nexus Pro</h1>
+          <p style={{ fontSize: 13, color: C.t2 }}>Enterprise Management System</p>
         </div>
 
         {!showForgot ? (
           <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 22, padding: 32, boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}>
             {error && <div style={{ background: C.redG, border: `1px solid ${C.red}33`, borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: C.red, display: "flex", alignItems: "center", gap: 8 }}><AlertCircle size={14} />{error}</div>}
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <FormField label="Email address"><Inp value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="admin@nexus.com" type="email" /></FormField>
-              <FormField label="Password"><Inp value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="••••••••" type="password" /></FormField>
-              <div style={{ textAlign: "right" }}>
-                <button onClick={() => setShowForgot(true)} style={{ background: "none", border: "none", color: C.accent, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>Forgot password?</button>
+            <form onSubmit={e => { e.preventDefault(); handleLogin(); }} autoComplete="off" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <FormField label="Email address">
+                <Inp value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                  placeholder="you@nexus.com" type="email" name="email" autoComplete="username" />
+              </FormField>
+              <FormField label="Password">
+                <Inp value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                  placeholder="••••••••" type="password" name="password" autoComplete="new-password" showToggle />
+              </FormField>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: C.t2 }}>
+                  <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)}
+                    style={{ width: 15, height: 15, accentColor: C.accent, cursor: "pointer" }} />
+                  <span>Remember me <span style={{ color: C.t3, fontSize: 11 }}>({rememberMe ? "30 days" : "8 hours"})</span></span>
+                </label>
+                <button type="button" onClick={() => setShowForgot(true)}
+                  style={{ background: "none", border: "none", color: C.accent, fontSize: 12, cursor: "pointer", fontWeight: 500 }}>
+                  Forgot password?
+                </button>
               </div>
-              <button onClick={handleLogin} disabled={loading}
+              <button type="submit" disabled={loading}
                 style={{ width: "100%", padding: "13px", borderRadius: 12, background: `linear-gradient(135deg,${C.accent},${C.accentD})`, color: "#fff", fontSize: 14, fontWeight: 700, border: "none", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? .7 : 1, boxShadow: `0 4px 20px rgba(99,102,241,0.45)`, transition: "all .18s" }}
                 onMouseEnter={e => { if (!loading) { e.currentTarget.style.filter = "brightness(1.1)"; e.currentTarget.style.transform = "translateY(-1px)"; } }}
-                onMouseLeave={e => { e.currentTarget.style.filter = ""; e.currentTarget.style.transform = ""; }}
-              >{loading ? "Signing in…" : "Sign In"}</button>
-            </div>
+                onMouseLeave={e => { e.currentTarget.style.filter = ""; e.currentTarget.style.transform = ""; }}>
+                {loading ? "Signing in…" : "Sign In"}
+              </button>
+            </form>
           </div>
         ) : (
           <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 22, padding: 32, boxShadow: "0 24px 64px rgba(0,0,0,0.6)" }}>
@@ -5301,7 +5907,7 @@ function LoginPage({ onLogin }) {
 
         <p style={{ textAlign: "center", fontSize: 11, color: C.t3, marginTop: 24, lineHeight: 1.6 }}>
           © 2026 Nexus Enterprises Exporters Private Limited.<br />
-          All Rights Reserved. Powered by <span style={{ color: C.accent, fontWeight: 600 }}>Nexus TZ</span>
+          All Rights Reserved. Powered by <span style={{ color: C.gold, fontWeight: 600 }}>Nexus TZ</span>
         </p>
       </div>
     </div>
@@ -5318,6 +5924,9 @@ export default function App() {
   const [clock, setClock]          = useState("");
   const [toasts, setToasts]        = useState([]);
 
+  // Pending logout — used by 15s Undo (Bug #6)
+  const [pendingLogout, setPendingLogout] = useState(null); // { secondsLeft, timer, interval }
+
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
@@ -5329,9 +5938,38 @@ export default function App() {
   }, []);
 
   const handleLogin  = u => setUser(u);
-  const handleLogout = () => { localStorage.removeItem("ems_token"); localStorage.removeItem("ems_user"); setUser(null); };
 
-  useSessionTimeout(user, handleLogout);
+  // Two-stage logout: first click starts 15s undo timer; if not cancelled, finalize.
+  const finalizeLogout = useCallback(async () => {
+    try { await apiFetch("/auth/logout", { method: "POST" }); } catch {}
+    localStorage.removeItem("ems_token");
+    localStorage.removeItem("ems_user");
+    localStorage.removeItem("ems_remember");
+    setUser(null);
+    setPendingLogout(null);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    if (pendingLogout) return; // already pending
+    let secondsLeft = 15;
+    const interval = setInterval(() => {
+      secondsLeft -= 1;
+      setPendingLogout(p => (p ? { ...p, secondsLeft } : p));
+      if (secondsLeft <= 0) clearInterval(interval);
+    }, 1000);
+    const timer = setTimeout(() => { clearInterval(interval); finalizeLogout(); }, 15000);
+    setPendingLogout({ secondsLeft, timer, interval });
+  }, [pendingLogout, finalizeLogout]);
+
+  const cancelLogout = useCallback(() => {
+    if (!pendingLogout) return;
+    clearTimeout(pendingLogout.timer);
+    clearInterval(pendingLogout.interval);
+    setPendingLogout(null);
+    addToast("Sign-out cancelled", "success");
+  }, [pendingLogout, addToast]);
+
+  useSessionTimeout(user, finalizeLogout);
 
   if (!user) return <LoginPage onLogin={handleLogin} />;
 
@@ -5364,7 +6002,7 @@ export default function App() {
     announcements: <AnnouncementsPage {...props} />,
     notifications: <NotificationsPage {...props} />,
     tools:         <ToolsPage />,
-    chat:          <ChatPage user={{ id: user?._id || user?.id, name: user?.name, role: user?.role }} socket={null} onlineUsers={[]} />,
+    chat:          <ChatPage user={{ id: user?._id || user?.id, name: user?.name, role: user?.role }} addToast={addToast} />,
   };
 
   const EMP_PAGES = {
@@ -5375,13 +6013,14 @@ export default function App() {
     tasks:         <TasksPage         {...props} />,
     projects:      <ProjectsPage      {...props} />,
     timesheet:     <TimesheetPage     {...props} />,
+    holidays:      <HolidaysPage      {...props} />,
     salary:        <SalaryPage        {...props} />,
     expenses:      <ExpensesPage      {...props} />,
     announcements: <AnnouncementsPage {...props} />,
     profile:       <ProfilePage       {...props} />,
     notifications: <NotificationsPage {...props} />,
     tools:         <ToolsPage />,
-    chat:          <ChatPage user={{ id: user?._id || user?.id, name: user?.name, role: user?.role }} socket={null} onlineUsers={[]} />,
+    chat:          <ChatPage user={{ id: user?._id || user?.id, name: user?.name, role: user?.role }} addToast={addToast} />,
   };
 
   const PAGES       = isAdmin(user) ? ADMIN_PAGES : EMP_PAGES;
@@ -5391,12 +6030,30 @@ export default function App() {
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: C.bg }}>
       <Sidebar active={activePage} setActive={p => { setActivePage(p); if (window.innerWidth < 768) setCollapsed(true); }} onLogout={handleLogout} user={user} collapsed={collapsed} setCollapsed={setCollapsed} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        <TopBar clock={clock} user={user} onNavigate={setActivePage} onToggleSidebar={() => setCollapsed(p => { const next = !p; localStorage.setItem("nx_sidebar", next ? "1" : "0"); return next; })} />
+        <TopBar clock={clock} user={user} onNavigate={setActivePage} onLogout={handleLogout}
+          onToggleSidebar={() => setCollapsed(p => { const next = !p; localStorage.setItem("nx_sidebar", next ? "1" : "0"); return next; })} />
         <div style={{ flex: 1, overflow: "hidden" }}>
           {currentPage}
         </div>
       </div>
       <Toast toasts={toasts} />
+      {pendingLogout && (
+        <div style={{
+          position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
+          background: C.panel, border: `2px solid ${C.gold || "#D4A24C"}`, borderRadius: 14,
+          padding: "14px 22px", boxShadow: "0 16px 40px rgba(212,162,76,0.3)",
+          display: "flex", alignItems: "center", gap: 16, zIndex: 9999,
+        }}>
+          <LogOut size={16} color="#D4A24C" />
+          <span style={{ color: C.t1, fontSize: 13, fontWeight: 600 }}>
+            Signing out in {pendingLogout.secondsLeft}s
+          </span>
+          <button onClick={cancelLogout}
+            style={{ background: "#D4A24C", border: "none", borderRadius: 8, padding: "7px 18px", cursor: "pointer", color: "#0b0d14", fontSize: 12, fontWeight: 800, letterSpacing: ".04em" }}>
+            UNDO
+          </button>
+        </div>
+      )}
     </div>
   );
 }
