@@ -93,6 +93,7 @@ const ADMIN_NAV = [
     { id:"buyers",        label:"Buyers",              icon: Package },
   ]},
   { section: "FINANCE", items: [
+    { id:"banking",       label:"Banking",             icon: Building2, superAdminOnly: true },
     { id:"payroll",       label:"Payroll",             icon: CreditCard },
     { id:"salary",        label:"Salary Management",   icon: Wallet },
     { id:"expenses",      label:"Expenses",            icon: DollarSign },
@@ -487,15 +488,21 @@ function Modal({ open, onClose, title, children, width = 500 }) {
   );
 }
 
-function Toast({ toasts }) {
+function Toast({ toasts, onDismiss }) {
   return (
     <div style={{ position: "fixed", bottom: 24, right: 24, display: "flex", flexDirection: "column", gap: 10, zIndex: 9998 }}>
       {toasts.map(t => (
-        <div key={t.id} className="fadeUp" style={{ display: "flex", alignItems: "center", gap: 10, background: C.panel, border: `1px solid ${t.type === "success" ? C.green + "44" : t.type === "error" ? C.red + "44" : C.border}`, borderRadius: 12, padding: "12px 16px", boxShadow: "0 8px 32px rgba(0,0,0,0.5)", fontSize: 13, fontWeight: 500, maxWidth: 340, color: C.t1 }}>
+        <div key={t.id} className="fadeUp" style={{ display: "flex", alignItems: "center", gap: 10, background: C.panel, border: `1px solid ${t.type === "success" ? C.green + "44" : t.type === "error" ? C.red + "44" : C.border}`, borderRadius: 12, padding: "12px 16px", boxShadow: "0 8px 32px rgba(0,0,0,0.5)", fontSize: 13, fontWeight: 500, maxWidth: 380, color: C.t1 }}>
           {t.type === "success" && <CheckCircle2 size={15} color={C.green} />}
           {t.type === "error"   && <AlertCircle  size={15} color={C.red}   />}
           {t.type === "info"    && <Zap          size={15} color={C.accent} />}
-          {t.message}
+          <span style={{ flex: 1 }}>{t.message}</span>
+          {t.action && (
+            <button
+              onClick={() => { t.action.onClick(); onDismiss && onDismiss(t.id); }}
+              style={{ background: C.accentG, border: `1px solid ${C.accent}44`, color: C.accent, fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 8, cursor: "pointer", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: ".05em" }}
+            >{t.action.label || "UNDO"}</button>
+          )}
         </div>
       ))}
     </div>
@@ -681,7 +688,7 @@ function Sidebar({ active, setActive, onLogout, user, collapsed, setCollapsed })
               </p>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: collapsed ? "center" : "stretch" }}>
-              {sec.items.map(item => (
+              {sec.items.filter(item => !item.superAdminOnly || user?.role === "super_admin").map(item => (
                 collapsed ? (
                   <button
                     key={item.id}
@@ -5264,6 +5271,371 @@ function TimesheetPage({ addToast, user }) {
   );
 }
 
+// ─── BANKING (Super Admin only) ───────────────────────────────────────────────
+function BankingPage({ addToast, user }) {
+  const [accounts, setAccounts] = useState([]);
+  const [stats, setStats] = useState({ totalCash: 0, inflow: 0, outflow: 0, net: 0, accountsCount: 0, transactionsThisMonth: 0 });
+  const [loading, setLoading] = useState(true);
+  const [selectedAcc, setSelectedAcc] = useState(null);
+  const [acctModal, setAcctModal] = useState(false);
+  const [acctForm, setAcctForm] = useState({ nickname: "", bankName: "", accountNumber: "", ifsc: "", openingBalance: "", openingDate: new Date().toISOString().split("T")[0], notes: "" });
+  const [savingAcct, setSavingAcct] = useState(false);
+  const [search, setSearch] = useState("");
+  const [period, setPeriod] = useState("month"); // month | year | all
+
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const [aR, sR] = await Promise.all([apiFetch("/banking/accounts"), apiFetch(`/banking/stats?period=${period}`)]);
+      const aD = await aR.json(); const sD = await sR.json();
+      setAccounts(safeArr(aD, "data", "accounts"));
+      if (sD?.data) setStats(sD.data);
+    } catch { addToast("Failed to load banking", "error"); }
+    setLoading(false);
+  };
+  useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [period]);
+
+  const handleCreateAcct = async () => {
+    if (!acctForm.nickname || !acctForm.bankName || !acctForm.accountNumber) return addToast("Nickname, bank name & account number required", "error");
+    setSavingAcct(true);
+    try {
+      const r = await apiFetch("/banking/accounts", { method: "POST", body: JSON.stringify({ ...acctForm, currency: "INR", openingBalance: Number(acctForm.openingBalance || 0) }) });
+      if (!r.ok) throw new Error();
+      addToast("Account created", "success"); setAcctModal(false);
+      setAcctForm({ nickname: "", bankName: "", accountNumber: "", ifsc: "", openingBalance: "", openingDate: new Date().toISOString().split("T")[0], notes: "" });
+      loadAll();
+    } catch { addToast("Failed to create account", "error"); }
+    setSavingAcct(false);
+  };
+
+  const handleDeleteAcct = async (acc) => {
+    try {
+      const r = await apiFetch(`/banking/accounts/${acc._id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      if (selectedAcc?._id === acc._id) setSelectedAcc(null);
+      await loadAll();
+      addToast(`Account "${acc.nickname}" deleted`, "info", {
+        label: "UNDO",
+        onClick: async () => {
+          try {
+            const rr = await apiFetch(`/banking/accounts/${acc._id}/restore`, { method: "POST" });
+            if (!rr.ok) throw new Error();
+            addToast("Account restored", "success");
+            loadAll();
+          } catch { addToast("Restore failed", "error"); }
+        },
+      });
+    } catch { addToast("Failed to delete", "error"); }
+  };
+
+  const fmtINR = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  const filtered = accounts.filter(a => !search || a.nickname?.toLowerCase().includes(search.toLowerCase()) || a.bankName?.toLowerCase().includes(search.toLowerCase()));
+
+  // Block non-super-admin defensively (sidebar already hides it)
+  if (user?.role !== "super_admin") {
+    return (
+      <PageShell title="Banking" sub="Restricted">
+        <div style={{ padding: 40, textAlign: "center", color: C.t2 }}>This module is restricted to Super Admins.</div>
+      </PageShell>
+    );
+  }
+
+  if (selectedAcc) {
+    return <BankAccountDetail account={selectedAcc} onBack={() => { setSelectedAcc(null); loadAll(); }} onDeleted={() => { setSelectedAcc(null); loadAll(); }} addToast={addToast} user={user} />;
+  }
+
+  return (
+    <PageShell title="Banking" sub={`${stats.accountsCount || accounts.length} active accounts · ${stats.transactionsThisMonth || 0} transactions this month`}
+      actions={<>
+        <Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search accounts..." icon={Search} style={{ width: 220 }} />
+        <button className="btn-pri" onClick={() => setAcctModal(true)}><Plus size={14} />Add Account</button>
+      </>}
+    >
+      {/* Period toggle */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <p style={{ fontSize: 12, color: C.t2, fontWeight: 600 }}>Showing <span style={{ color: C.t1 }}>{period === "month" ? "this month" : period === "year" ? "this year" : "all-time"}</span></p>
+        <div style={{ display: "inline-flex", background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 3 }}>
+          {[{ k: "month", l: "Month" }, { k: "year", l: "Year" }, { k: "all", l: "All-time" }].map(p => (
+            <button
+              key={p.k}
+              onClick={() => setPeriod(p.k)}
+              style={{
+                padding: "6px 14px", fontSize: 12, fontWeight: 700, border: "none", borderRadius: 7, cursor: "pointer",
+                background: period === p.k ? C.accentG : "transparent",
+                color: period === p.k ? C.accent : C.t2,
+                transition: "background .15s, color .15s",
+              }}
+            >{p.l}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
+        {[
+          { label: "Total Cash on Hand", value: fmtINR(stats.totalCash), color: C.accent, icon: Wallet },
+          { label: `Inflow ${period === "month" ? "(Month)" : period === "year" ? "(Year)" : "(All)"}`,  value: fmtINR(stats.inflow),  color: C.green, icon: ArrowUpRight },
+          { label: `Outflow ${period === "month" ? "(Month)" : period === "year" ? "(Year)" : "(All)"}`, value: fmtINR(stats.outflow), color: C.red,   icon: TrendingUp },
+          { label: `Net ${period === "month" ? "(Month)" : period === "year" ? "(Year)" : "(All)"}`,     value: fmtINR(stats.net),     color: stats.net >= 0 ? C.green : C.red, icon: Activity },
+        ].map(s => (
+          <div key={s.label} className="card" style={{ padding: 20, display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 13, background: s.color + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <s.icon size={20} color={s.color} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 11, color: C.t2, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>{s.label}</p>
+              {loading ? <Sk h={20} w={120} /> : <p style={{ fontSize: 20, fontWeight: 800, color: C.t1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.value}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Account cards grid */}
+      {loading ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="card" style={{ padding: 20, height: 170 }}><Sk h={16} w={140} /><div style={{ height: 12 }} /><Sk h={26} w={180} /><div style={{ height: 18 }} /><Sk h={12} w={100} /></div>)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card" style={{ padding: 60, textAlign: "center" }}>
+          <Building2 size={40} color={C.t3} style={{ margin: "0 auto 12px" }} />
+          <p style={{ fontSize: 14, color: C.t2, marginBottom: 4 }}>No bank accounts yet</p>
+          <p style={{ fontSize: 12, color: C.t3 }}>Click "Add Account" to create your first one</p>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+          {filtered.map(acc => {
+            const last4 = (acc.accountNumber || "").slice(-4);
+            return (
+              <div key={acc._id} className="card" onClick={() => setSelectedAcc(acc)}
+                style={{ padding: 20, cursor: "pointer", transition: "transform .15s, border-color .15s", borderColor: C.border }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.borderH; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "none"; }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 11, background: C.accentG, border: `1px solid ${C.accent}28`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Building2 size={18} color={C.accent} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>{acc.nickname}</p>
+                      <p style={{ fontSize: 11, color: C.t2 }}>{acc.bankName}</p>
+                    </div>
+                  </div>
+                  {statusBadge(acc.status || "active")}
+                </div>
+                <p style={{ fontSize: 11, color: C.t3, letterSpacing: ".08em", marginBottom: 4 }}>•••• •••• •••• {last4 || "----"}</p>
+                <p style={{ fontSize: 24, fontWeight: 800, color: C.t1, letterSpacing: "-.02em", marginBottom: 4 }}>{fmtINR(acc.balance)}</p>
+                <p style={{ fontSize: 11, color: C.t2 }}>Current Balance</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add Account Modal */}
+      <Modal open={acctModal} onClose={() => setAcctModal(false)} title="Add Bank Account" width={560}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Nickname *"><Inp value={acctForm.nickname} onChange={e => setAcctForm(p => ({ ...p, nickname: e.target.value }))} placeholder="e.g. HDFC Current" /></FormField>
+            <FormField label="Bank Name *"><Inp value={acctForm.bankName} onChange={e => setAcctForm(p => ({ ...p, bankName: e.target.value }))} placeholder="e.g. HDFC Bank" /></FormField>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Account Number *"><Inp value={acctForm.accountNumber} onChange={e => setAcctForm(p => ({ ...p, accountNumber: e.target.value }))} placeholder="50100123456789" /></FormField>
+            <FormField label="IFSC Code"><Inp value={acctForm.ifsc} onChange={e => setAcctForm(p => ({ ...p, ifsc: e.target.value.toUpperCase() }))} placeholder="HDFC0001234" /></FormField>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Opening Balance (₹)"><Inp value={acctForm.openingBalance} onChange={e => setAcctForm(p => ({ ...p, openingBalance: e.target.value }))} placeholder="0" type="number" /></FormField>
+            <FormField label="Opening Date"><Inp value={acctForm.openingDate} onChange={e => setAcctForm(p => ({ ...p, openingDate: e.target.value }))} type="date" /></FormField>
+          </div>
+          <FormField label="Notes"><textarea className="inp" value={acctForm.notes} onChange={e => setAcctForm(p => ({ ...p, notes: e.target.value }))} placeholder="Optional notes..." rows={2} style={{ resize: "vertical" }} /></FormField>
+          <div style={{ background: C.accentG, border: `1px solid ${C.accent}28`, borderRadius: 10, padding: "10px 14px", fontSize: 12, color: C.t2 }}>
+            Currency locked to <strong style={{ color: C.t1 }}>₹ INR</strong> for this sprint.
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button className="btn-ghost" onClick={() => setAcctModal(false)}>Cancel</button>
+            <button className="btn-pri" onClick={handleCreateAcct} disabled={savingAcct}>{savingAcct ? "Creating..." : "Create Account"}</button>
+          </div>
+        </div>
+      </Modal>
+    </PageShell>
+  );
+}
+
+// ─── BANK ACCOUNT DETAIL (transactions panel) ─────────────────────────────────
+function BankAccountDetail({ account, onBack, onDeleted, addToast, user }) {
+  const [acc, setAcc] = useState(account);
+  const [txns, setTxns] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [txnModal, setTxnModal] = useState(false);
+  const [txnForm, setTxnForm] = useState({ date: new Date().toISOString().split("T")[0], description: "", type: "credit", amount: "", category: "Income", reference: "", notes: "" });
+  const [savingTxn, setSavingTxn] = useState(false);
+  const [filterCat, setFilterCat] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [aR, tR] = await Promise.all([
+        apiFetch(`/banking/accounts/${account._id}`),
+        apiFetch(`/banking/accounts/${account._id}/transactions?limit=200${filterCat ? `&category=${filterCat}` : ""}`),
+      ]);
+      const aD = await aR.json(); const tD = await tR.json();
+      if (aD?.data) setAcc(aD.data);
+      setTxns(safeArr(tD, "data", "transactions"));
+    } catch { addToast("Failed to load transactions", "error"); }
+    setLoading(false);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [filterCat]);
+
+  const handleAddTxn = async () => {
+    if (!txnForm.description || !txnForm.amount) return addToast("Description and amount required", "error");
+    setSavingTxn(true);
+    try {
+      const r = await apiFetch(`/banking/accounts/${account._id}/transactions`, { method: "POST", body: JSON.stringify({ ...txnForm, amount: Number(txnForm.amount) }) });
+      if (!r.ok) throw new Error();
+      addToast("Transaction added", "success"); setTxnModal(false);
+      setTxnForm({ date: new Date().toISOString().split("T")[0], description: "", type: "credit", amount: "", category: "Income", reference: "", notes: "" });
+      load();
+    } catch { addToast("Failed to add transaction", "error"); }
+    setSavingTxn(false);
+  };
+
+  const handleDeleteTxn = async (txn) => {
+    try {
+      const r = await apiFetch(`/banking/transactions/${txn._id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      await load();
+      addToast("Transaction deleted", "info", {
+        label: "UNDO",
+        onClick: async () => {
+          try {
+            const rr = await apiFetch(`/banking/transactions/${txn._id}/restore`, { method: "POST" });
+            if (!rr.ok) throw new Error();
+            addToast("Transaction restored", "success");
+            load();
+          } catch { addToast("Restore failed", "error"); }
+        },
+      });
+    } catch { addToast("Failed to delete", "error"); }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm(`Delete account "${acc.nickname}"? You can restore within 10s via the toast.`)) return;
+    try {
+      const r = await apiFetch(`/banking/accounts/${acc._id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      addToast(`Account "${acc.nickname}" deleted`, "info", {
+        label: "UNDO",
+        onClick: async () => {
+          try {
+            const rr = await apiFetch(`/banking/accounts/${acc._id}/restore`, { method: "POST" });
+            if (!rr.ok) throw new Error();
+            addToast("Account restored", "success");
+          } catch { addToast("Restore failed", "error"); }
+        },
+      });
+      onDeleted();
+    } catch { addToast("Failed to delete", "error"); }
+  };
+
+  const fmtINR = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  const catColor = (c) => ({ Income: C.green, Expense: C.red, Transfer: C.blue, Salary: C.purple, Other: C.t2 }[c] || C.t2);
+  const last4 = (acc.accountNumber || "").slice(-4);
+
+  return (
+    <PageShell
+      title={
+        <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={onBack} className="btn-ghost" style={{ padding: "6px 10px" }}><ChevronLeft size={14} />Back</button>
+          {acc.nickname}
+        </span>
+      }
+      sub={`${acc.bankName} · •••• ${last4 || "----"}${acc.ifsc ? ` · ${acc.ifsc}` : ""}`}
+      actions={<>
+        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="inp" style={{ width: 150 }}>
+          <option value="">All categories</option>
+          <option value="Income">Income</option>
+          <option value="Expense">Expense</option>
+          <option value="Transfer">Transfer</option>
+          <option value="Salary">Salary</option>
+          <option value="Other">Other</option>
+        </select>
+        <button className="btn-pri" onClick={() => setTxnModal(true)}><Plus size={14} />Add Transaction</button>
+        <button className="btn-icon" style={{ background: C.redG, color: C.red }} onClick={handleDeleteAccount} title="Delete account"><Trash2 size={14} /></button>
+      </>}
+    >
+      {/* Account header card */}
+      <div className="card" style={{ padding: 22, marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, background: C.accentG, border: `1px solid ${C.accent}28`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Building2 size={24} color={C.accent} />
+          </div>
+          <div>
+            <p style={{ fontSize: 11, color: C.t2, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 4 }}>Current Balance</p>
+            <p style={{ fontSize: 30, fontWeight: 800, color: C.t1, letterSpacing: "-.02em" }}>{fmtINR(acc.balance)}</p>
+            <p style={{ fontSize: 12, color: C.t2, marginTop: 4 }}>Opening: {fmtINR(acc.openingBalance)} · {acc.openingDate ? new Date(acc.openingDate).toLocaleDateString("en-IN") : "—"}</p>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          {statusBadge(acc.status || "active")}
+          <p style={{ fontSize: 11, color: C.t3 }}>{txns.length} transactions</p>
+        </div>
+      </div>
+
+      {/* Transactions table */}
+      <Table loading={loading} columns={[
+        { key: "date", label: "Date", render: v => <span style={{ color: C.t2, fontSize: 12, whiteSpace: "nowrap" }}>{v ? new Date(v).toLocaleDateString("en-IN") : "—"}</span> },
+        { key: "description", label: "Description", render: (v, row) => (
+          <div>
+            <p style={{ fontWeight: 600, fontSize: 13 }}>{v || "—"}</p>
+            {row.reference && <p style={{ fontSize: 11, color: C.t3 }}>Ref: {row.reference}</p>}
+          </div>
+        )},
+        { key: "category", label: "Category", render: v => v ? <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: catColor(v) + "22", color: catColor(v), fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em" }}>{v}</span> : "—" },
+        { key: "type", label: "Debit", render: (v, row) => v === "debit" ? <span style={{ color: C.red, fontWeight: 700 }}>-{fmtINR(row.amount)}</span> : <span style={{ color: C.t3 }}>—</span> },
+        { key: "_credit", label: "Credit", render: (_v, row) => row.type === "credit" ? <span style={{ color: C.green, fontWeight: 700 }}>+{fmtINR(row.amount)}</span> : <span style={{ color: C.t3 }}>—</span> },
+        { key: "runningBalance", label: "Balance", render: v => <span style={{ color: C.t1, fontWeight: 600 }}>{fmtINR(v)}</span> },
+        { key: "_id", label: "", render: (_v, row) => (
+          <button className="btn-icon" style={{ background: C.redG, color: C.red }} onClick={() => handleDeleteTxn(row)} title="Delete"><Trash2 size={12} /></button>
+        )},
+      ]} rows={txns} emptyText="No transactions yet" />
+
+      {/* Add Transaction Modal */}
+      <Modal open={txnModal} onClose={() => setTxnModal(false)} title="Add Transaction" width={560}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Date"><Inp value={txnForm.date} onChange={e => setTxnForm(p => ({ ...p, date: e.target.value }))} type="date" /></FormField>
+            <FormField label="Type">
+              <select value={txnForm.type} onChange={e => setTxnForm(p => ({ ...p, type: e.target.value }))} className="inp">
+                <option value="credit">Credit (Money In)</option>
+                <option value="debit">Debit (Money Out)</option>
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Description *"><Inp value={txnForm.description} onChange={e => setTxnForm(p => ({ ...p, description: e.target.value }))} placeholder="e.g. Invoice payment from ABC Corp" /></FormField>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Amount (₹) *"><Inp value={txnForm.amount} onChange={e => setTxnForm(p => ({ ...p, amount: e.target.value }))} placeholder="0.00" type="number" /></FormField>
+            <FormField label="Category">
+              <select value={txnForm.category} onChange={e => setTxnForm(p => ({ ...p, category: e.target.value }))} className="inp">
+                <option value="Income">Income</option>
+                <option value="Expense">Expense</option>
+                <option value="Transfer">Transfer</option>
+                <option value="Salary">Salary</option>
+                <option value="Other">Other</option>
+              </select>
+            </FormField>
+          </div>
+          <FormField label="Reference (optional)"><Inp value={txnForm.reference} onChange={e => setTxnForm(p => ({ ...p, reference: e.target.value }))} placeholder="Cheque no, UTR, invoice #" /></FormField>
+          <FormField label="Notes"><textarea className="inp" value={txnForm.notes} onChange={e => setTxnForm(p => ({ ...p, notes: e.target.value }))} placeholder="Optional notes..." rows={2} style={{ resize: "vertical" }} /></FormField>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button className="btn-ghost" onClick={() => setTxnModal(false)}>Cancel</button>
+            <button className="btn-pri" onClick={handleAddTxn} disabled={savingTxn}>{savingTxn ? "Adding..." : "Add Transaction"}</button>
+          </div>
+        </div>
+      </Modal>
+    </PageShell>
+  );
+}
+
 // ─── PAYROLL ──────────────────────────────────────────────────────────────────
 function PayrollPage({ addToast, user }) {
   const [payrolls, setPayrolls] = useState([]);
@@ -5932,10 +6304,12 @@ export default function App() {
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
   }, []);
 
-  const addToast = useCallback((message, type = "info") => {
-    const id = Date.now(); setToasts(p => [...p, { id, message, type }]);
-    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000);
+  const addToast = useCallback((message, type = "info", action = null) => {
+    const id = Date.now(); setToasts(p => [...p, { id, message, type, action }]);
+    const duration = action ? 10000 : 4000;
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), duration);
   }, []);
+  const dismissToast = useCallback((id) => setToasts(p => p.filter(t => t.id !== id)), []);
 
   const handleLogin  = u => setUser(u);
 
@@ -5992,6 +6366,7 @@ export default function App() {
     payroll:       <PayrollPage       {...props} />,
     salary:        <SalaryPage        {...props} />,
     expenses:      <ExpensesPage      {...props} />,
+    banking:       <BankingPage       {...props} />,
     reports:       <ReportsPage       {...props} />,
     buyers:        <BuyersPage        {...props} />,
     orders:        <OrdersPage        {...props} />,
@@ -6036,7 +6411,7 @@ export default function App() {
           {currentPage}
         </div>
       </div>
-      <Toast toasts={toasts} />
+      <Toast toasts={toasts} onDismiss={dismissToast} />
       {pendingLogout && (
         <div style={{
           position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
