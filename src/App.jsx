@@ -437,12 +437,18 @@ function Badge({ label, color = C.accent }) {
 
 function statusBadge(s) {
   const sl = s?.toLowerCase();
-  if (["active","present","paid","completed","approved","on_time","early"].includes(sl))
+  if (["active","present","paid","completed","approved","on_time"].includes(sl))
     return <Badge label={sl === "on_time" ? "ON TIME" : s?.toUpperCase()} color={C.green} />;
+  if (sl === "early")
+    return <Badge label="EARLY" color={C.cyan || C.green} />;
   if (["inactive","absent","failed","cancelled","rejected"].includes(sl))
     return <Badge label={s?.toUpperCase()} color={C.red} />;
-  if (["pending","late","processing","on leave","half_day"].includes(sl))
+  if (["pending","late","processing","half_day"].includes(sl))
     return <Badge label={sl === "half_day" ? "HALF DAY" : s?.toUpperCase()} color={C.amber} />;
+  if (sl === "on_leave" || sl === "on leave")
+    return <Badge label="ON LEAVE" color={C.purple} />;
+  if (sl === "holiday")
+    return <Badge label="HOLIDAY" color={C.blue} />;
   return <Badge label={s?.toUpperCase() || "—"} color={C.t2} />;
 }
 
@@ -1228,8 +1234,17 @@ function DashboardPage({ addToast, user, setPage }) {
     try {
       const r = await apiFetch("/attendance/login", { method: "POST" });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.message || "Failed");
-      addToast(d.message || "Session started!", "success");
+      if (!r.ok) {
+        if (d.code === "ALREADY_COMPLETED" || d.code === "ALREADY_ACTIVE") {
+          addToast(d.message, "info");
+          await load();
+          return;
+        }
+        throw new Error(d.message || "Failed");
+      }
+      const status = d.attendance?.status;
+      const toastType = status === "late" || status === "half_day" ? "warning" : "success";
+      addToast(d.message || "Session started!", toastType);
       await load();
     } catch (e) { addToast(e.message || "Could not start session", "error"); }
     setSessionLoading(false);
@@ -1241,7 +1256,17 @@ function DashboardPage({ addToast, user, setPage }) {
       const r = await apiFetch("/attendance/checkout", { method: "POST" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.message || "Failed");
-      addToast("Session ended. " + (d.attendance?.totalHours ? `Total: ${d.attendance.totalHours}h` : ""), "success");
+      addToast("Session ended. " + (d.attendance?.totalHours ? `Total: ${d.attendance.totalHours}h · ${d.attendance.status}` : ""), "success", {
+        label: "UNDO",
+        onClick: async () => {
+          try {
+            const ur = await apiFetch("/attendance/undo-checkout", { method: "POST" });
+            if (!ur.ok) { const ud = await ur.json().catch(()=>({})); throw new Error(ud.message || "Undo failed"); }
+            addToast("Session resumed", "success");
+            await load();
+          } catch (e) { addToast(e.message || "Undo failed", "error"); }
+        }
+      });
       await load();
     } catch (e) { addToast(e.message || "Could not end session", "error"); }
     setSessionLoading(false);
@@ -1746,6 +1771,28 @@ function DashboardPage({ addToast, user, setPage }) {
           {today.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </div>
       </div>
+
+      {/* ── Quote of the Day (admin) ── */}
+      {quote?.quote && (
+        <div style={{
+          background: `linear-gradient(135deg, ${C.accent}18, ${C.purple || C.accent}10)`,
+          border: `1px solid ${C.accent}33`,
+          borderRadius: 14,
+          padding: "14px 20px",
+          marginBottom: 16,
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+        }}>
+          <div style={{ fontSize: 28, lineHeight: 1, color: C.accent, fontFamily: "Georgia, serif" }}>"</div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 14, color: C.t1, fontStyle: "italic", fontWeight: 500, lineHeight: 1.4 }}>
+              {quote.quote}
+            </p>
+            <p style={{ fontSize: 11, color: C.t2, marginTop: 4, fontWeight: 600 }}>— {quote.author}</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Main 2-col layout: content | right panel ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 276px", gap: 16 }}>
@@ -2542,6 +2589,8 @@ function AttendancePage({ addToast, user }) {
   const [checkLoading, setCheckLoading] = useState(false);
   const [todayRec, setTodayRec] = useState(null);
   const [settings, setSettings] = useState(null);
+  const [windows, setWindows] = useState(null);
+  const [wouldBe, setWouldBe] = useState(null);
   const [search, setSearch] = useState("");
   const [liveTime, setLiveTime] = useState(new Date());
   useEffect(() => {
@@ -2573,6 +2622,8 @@ function AttendancePage({ addToast, user }) {
         setSettings(sR.value?.company || sR.value);
         // admin gets their own today record for check-in/out card
         setTodayRec(tR.value?.attendance || null);
+        setWindows(tR.value?.windows || null);
+        setWouldBe(tR.value?.wouldBe || null);
       } else {
         const [aR, sR, tR] = await Promise.allSettled([
           apiFetch(tab === "monthly" ? `/attendance/monthly?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
@@ -2588,6 +2639,8 @@ function AttendancePage({ addToast, user }) {
         setSettings(sR.value?.company || sR.value);
         // prefer the live /today endpoint over searching the list
         setTodayRec(tR.value?.attendance || recs.find(r => r.date && new Date(r.date).toDateString() === new Date().toDateString()) || null);
+        setWindows(tR.value?.windows || null);
+        setWouldBe(tR.value?.wouldBe || null);
       }
     } catch { addToast("Failed to load attendance", "error"); }
     setLoading(false);
@@ -2599,8 +2652,19 @@ function AttendancePage({ addToast, user }) {
     try {
       const r = await apiFetch("/attendance/login", { method: "POST" });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.message);
-      addToast(`Checked in — ${d.attendance?.status || "Recorded"}`, "success"); load();
+      if (!r.ok) {
+        // Special-case already-completed: silently refresh so the "Completed" card shows
+        if (d.code === "ALREADY_COMPLETED" || d.code === "ALREADY_ACTIVE") {
+          addToast(d.message, "info");
+          load();
+          return;
+        }
+        throw new Error(d.message);
+      }
+      const status = d.attendance?.status;
+      const toastType = status === "late" || status === "half_day" ? "warning" : "success";
+      addToast(d.message || `Checked in — ${status}`, toastType);
+      load();
     } catch (e) { addToast(e.message || "Check-in failed", "error"); }
     setCheckLoading(false);
   };
@@ -2645,7 +2709,7 @@ function AttendancePage({ addToast, user }) {
   const total    = filtered.length || 1;
 
   const getDaysInMonth = (m, y) => new Date(y, m, 0).getDate();
-  const getDotColor = s => { const sl = s?.toLowerCase(); if (["present","on_time","early"].includes(sl)) return C.green; if (sl==="absent") return C.red; if (sl==="late") return C.amber; if (sl==="half_day") return C.blue; return C.t3; };
+  const getDotColor = s => { const sl = s?.toLowerCase(); if (["present","on_time"].includes(sl)) return C.green; if (sl==="early") return C.cyan || C.green; if (sl==="absent") return C.red; if (sl==="late") return C.amber; if (sl==="half_day") return C.blue; if (sl==="on_leave"||sl==="on leave") return C.purple; if (sl==="holiday") return C.purple; return C.t3; };
   const formatTime = t => { if (!t) return "—"; try { return new Date(t).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }); } catch { return t; } };
   const formatDate = t => { if (!t) return "—"; try { return new Date(t).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); } catch { return t; } };
 
@@ -2687,16 +2751,33 @@ function AttendancePage({ addToast, user }) {
         const elapsedSecs   = todayRec?.checkIn && !sessionDone ? Math.floor((liveTime - new Date(todayRec.checkIn)) / 1000) : 0;
         const statusColor   = sessionDone ? C.blue : sessionActive ? C.green : C.t3;
         const statusLabel   = sessionDone ? "Completed" : sessionActive ? "● Live" : "Not Started";
+        const fmtT          = d => d ? new Date(d).toLocaleTimeString("en-IN",{ hour:"2-digit", minute:"2-digit", hour12:true }) : "—";
+        const shiftWindowText = windows ? `${fmtT(windows.shiftStart)} — ${fmtT(windows.shiftEnd)}` : "—";
+        // Pre-check-in hint: what would happen if user clicks Start now?
+        let hint = null;
+        if (!sessionActive && !sessionDone && wouldBe) {
+          if (!wouldBe.allowed) {
+            hint = { kind: "block", msg: wouldBe.message, color: C.red };
+          } else if (wouldBe.status === "early") {
+            hint = { kind: "info", msg: "You're early — will be marked EARLY", color: C.cyan || C.green };
+          } else if (wouldBe.status === "present") {
+            hint = { kind: "ok", msg: "Within window — will be marked PRESENT", color: C.green };
+          } else if (wouldBe.status === "late") {
+            hint = { kind: "warn", msg: "After grace — will be marked LATE", color: C.amber };
+          } else if (wouldBe.status === "half_day") {
+            hint = { kind: "warn", msg: "Very late — will be marked HALF DAY", color: C.amber };
+          }
+        }
         return (
           <div className="card" style={{ padding: 22, marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>My Work Session</h2>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                {settings?.sessionStartTime && <span style={{ fontSize: 11, color: C.t2 }}>Window: {settings.sessionStartTime} — {settings.sessionEndTime || "—"}</span>}
+                {windows && <span style={{ fontSize: 11, color: C.t2 }}>Shift: {shiftWindowText}</span>}
                 <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: statusColor + "18", padding: "4px 12px", borderRadius: 20 }}>{statusLabel}</span>
               </div>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: hint ? 14 : 20 }}>
               {[
                 { label: "Session Started", value: todayRec?.checkIn ? formatTime(todayRec.checkIn) : "—", sub: todayRec?.checkIn ? new Date(todayRec.checkIn).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "Not started yet", color: todayRec?.checkIn ? C.green : C.t3 },
                 { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : todayRec?.totalHours ? Number(todayRec.totalHours).toFixed(1)+"h total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
@@ -2709,17 +2790,23 @@ function AttendancePage({ addToast, user }) {
                 </div>
               ))}
             </div>
+            {hint && !sessionActive && !sessionDone && (
+              <div style={{ padding: "10px 14px", background: hint.color + "14", border: `1px solid ${hint.color}33`, borderRadius: 10, marginBottom: 14, fontSize: 12, color: hint.color, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertCircle size={14} />{hint.msg}
+              </div>
+            )}
             {sessionDone ? (
               <div style={{ padding: "12px 16px", background: C.blue+"14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
                 <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {todayRec?.totalHours ? Number(todayRec.totalHours).toFixed(1)+"h worked" : ""} · {statusBadge(todayRec?.status)}</p>
+                <p style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>You're done for today. Re-check-in is disabled.</p>
               </div>
             ) : sessionActive ? (
               <button onClick={handleCheckOut} disabled={checkLoading} style={{ width: "100%", padding: "13px", background: `linear-gradient(135deg,${C.red},#dc2626)`, border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: checkLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: checkLoading ? 0.7 : 1 }}>
                 <AlertCircle size={16} />{checkLoading ? "Ending…" : "End Session"}
               </button>
             ) : (
-              <button onClick={handleCheckIn} disabled={checkLoading} style={{ width: "100%", padding: "13px", background: `linear-gradient(135deg,${C.accent},${C.accentD})`, border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: checkLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: checkLoading ? 0.7 : 1 }}>
-                <CheckCircle2 size={16} />{checkLoading ? "Starting…" : "Start Session"}
+              <button onClick={handleCheckIn} disabled={checkLoading || (wouldBe && !wouldBe.allowed)} style={{ width: "100%", padding: "13px", background: (wouldBe && !wouldBe.allowed) ? C.t3 : `linear-gradient(135deg,${C.accent},${C.accentD})`, border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: (checkLoading || (wouldBe && !wouldBe.allowed)) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: (checkLoading || (wouldBe && !wouldBe.allowed)) ? 0.6 : 1 }}>
+                <CheckCircle2 size={16} />{checkLoading ? "Starting…" : (wouldBe && !wouldBe.allowed) ? "Check-in unavailable" : "Start Session"}
               </button>
             )}
           </div>
