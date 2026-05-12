@@ -2958,14 +2958,25 @@ function WorklogsPage({ addToast, user }) {
 }
 
 // ─── TASKS ────────────────────────────────────────────────────────────────────
+// ─── TASKS — KANBAN BOARD ─────────────────────────────────────────────────────
+const KANBAN_COLS = [
+  { id: "backlog",     label: "Backlog",     accent: "#6b7280" },
+  { id: "in_progress", label: "In Progress", accent: "#3b82f6" },
+  { id: "review",      label: "Review",      accent: "#f59e0b" },
+  { id: "done",        label: "Done",        accent: "#10b981" },
+];
+
 function TasksPage({ addToast, user }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
   const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", assignedTo: "", deadline: "", priority: "medium" });
+  const [form, setForm] = useState({ title: "", description: "", assignedTo: "", deadline: "", priority: "medium", column: "backlog" });
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [openTask, setOpenTask] = useState(null);
+  const [filterPriority, setFilterPriority] = useState("");
+  const [filterAssignee, setFilterAssignee] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -2988,97 +2999,338 @@ function TasksPage({ addToast, user }) {
     try {
       const r = await apiFetch("/tasks", { method: "POST", body: JSON.stringify(form) });
       if (!r.ok) throw new Error();
-      addToast("Task assigned!", "success"); setModal(false);
-      setForm({ title: "", description: "", assignedTo: "", deadline: "", priority: "medium" }); load();
+      addToast("Task created", "success"); setModal(false);
+      setForm({ title: "", description: "", assignedTo: "", deadline: "", priority: "medium", column: "backlog" });
+      load();
     } catch { addToast("Failed to create task", "error"); }
     setSaving(false);
   };
 
-  const updateStatus = async (id, status) => {
-    try { await apiFetch(`/tasks/${id}`, { method: "PUT", body: JSON.stringify({ status }) }); addToast("Task updated", "success"); load(); }
-    catch { addToast("Failed", "error"); }
+  const moveCard = async (task, newCol) => {
+    if (task.column === newCol) return;
+    // Optimistic update
+    setTasks(prev => prev.map(t => t._id === task._id ? { ...t, column: newCol } : t));
+    try {
+      const r = await apiFetch(`/tasks/${task._id}/column`, { method: "PATCH", body: JSON.stringify({ column: newCol }) });
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      if (d?.data) setTasks(prev => prev.map(t => t._id === task._id ? d.data : t));
+      if (openTask && openTask._id === task._id && d?.data) setOpenTask(d.data);
+    } catch { addToast("Failed to move card", "error"); load(); }
   };
 
   const deleteTask = async (id) => {
-    try { await apiFetch(`/tasks/${id}`, { method: "DELETE" }); addToast("Deleted", "success"); load(); }
-    catch { addToast("Failed", "error"); }
+    if (!window.confirm("Delete this task?")) return;
+    try {
+      const r = await apiFetch(`/tasks/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      addToast("Task deleted", "success");
+      if (openTask?._id === id) setOpenTask(null);
+      load();
+    } catch { addToast("Failed to delete", "error"); }
   };
 
   const priorityColor = p => p === "high" ? C.red : p === "medium" ? C.amber : C.green;
-  const filtered = tasks.filter(t => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return [t.title, t.assignedTo?.name, t.assignedBy?.name, t.description, t.status, t.priority].some(f => f?.toLowerCase?.().includes(q));
+
+  // Filter tasks
+  const filteredTasks = tasks.filter(t => {
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const hay = [t.title, t.description, t.assignedTo?.name].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (filterPriority && t.priority !== filterPriority) return false;
+    if (filterAssignee && t.assignedTo?._id !== filterAssignee) return false;
+    return true;
   });
 
+  // Group by column. Use "backlog" as fallback for legacy tasks without a column field.
+  const byColumn = (colId) => filteredTasks.filter(t => {
+    const c = t.column || (t.status === "completed" ? "done" : t.status === "in_progress" ? "in_progress" : "backlog");
+    return c === colId;
+  });
+
+  // DRAG: native HTML5 drag-and-drop
+  const onDragStart = (e, task) => {
+    e.dataTransfer.setData("text/plain", task._id);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
+  const onDrop = (e, colId) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData("text/plain");
+    const t = tasks.find(x => x._id === taskId);
+    if (t) moveCard(t, colId);
+  };
+
   return (
-    <PageShell title="Tasks" sub={isAdmin(user) ? "Assign and manage tasks" : "Your assigned tasks"}
+    <PageShell title="Tasks" sub={`${tasks.length} total · drag cards between columns`}
       actions={<>
-        <Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks…" icon={Search} style={{ width: 220 }} />
-        {isAdmin(user) && <button className="btn-pri" onClick={() => setModal(true)}><Plus size={14} />Assign Task</button>}
+        <Inp value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tasks…" icon={Search} style={{ width: 200 }} />
+        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} className="inp" style={{ width: 130 }}>
+          <option value="">All priorities</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+        </select>
+        {isAdmin(user) && (
+          <select value={filterAssignee} onChange={e => setFilterAssignee(e.target.value)} className="inp" style={{ width: 160 }}>
+            <option value="">All assignees</option>
+            {users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+          </select>
+        )}
+        {isAdmin(user) && <button className="btn-pri" onClick={() => setModal(true)}><Plus size={14} />New Task</button>}
       </>}
     >
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 14 }}>
-        {loading ? Array(6).fill(0).map((_, i) => <Sk key={i} h={140} />) : filtered.length === 0 ? (
-          <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "60px 0", color: C.t2, fontSize: 13 }}>No tasks found</div>
-        ) : filtered.map((task, i) => (
-          <div key={task._id || i} className="card" style={{ padding: 18 }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: priorityColor(task.priority) + "22", color: priorityColor(task.priority), textTransform: "uppercase" }}>{task.priority || "medium"}</span>
-                  {statusBadge(task.status || "pending")}
+      {/* Kanban board */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, minHeight: "calc(100vh - 280px)" }}>
+        {KANBAN_COLS.map(col => {
+          const colTasks = byColumn(col.id);
+          return (
+            <div
+              key={col.id}
+              onDragOver={onDragOver}
+              onDrop={(e) => onDrop(e, col.id)}
+              style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", minHeight: 200 }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 4, background: col.accent }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.t1, textTransform: "uppercase", letterSpacing: ".05em" }}>{col.label}</span>
                 </div>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>{task.title}</h3>
+                <span style={{ fontSize: 11, color: C.t2, background: C.panel, padding: "2px 8px", borderRadius: 20, fontWeight: 600 }}>{colTasks.length}</span>
               </div>
-              {isAdmin(user) && (
-                <button className="btn-icon" style={{ background: C.redG, color: C.red, flexShrink: 0 }} onClick={() => deleteTask(task._id)}><Trash2 size={12} /></button>
-              )}
-            </div>
-            <p style={{ fontSize: 12, color: C.t2, marginBottom: 12, lineHeight: 1.5 }}>{task.description || "No description"}</p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <div style={{ width: 24, height: 24, borderRadius: 7, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: C.accent }}>
-                  {(task.assignedTo?.name || "?")[0]?.toUpperCase()}
-                </div>
-                <span style={{ fontSize: 12, color: C.t2 }}>{task.assignedTo?.name || "Unassigned"}</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, overflowY: "auto", maxHeight: "calc(100vh - 340px)" }}>
+                {loading ? <Sk h={80} /> : colTasks.length === 0 ? (
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 8px", color: C.t3, fontSize: 11, fontStyle: "italic", textAlign: "center", border: `1px dashed ${C.border}`, borderRadius: 8, minHeight: 80 }}>
+                    Drop tasks here
+                  </div>
+                ) : colTasks.map(task => {
+                  const doneSubs = (task.subtasks || []).filter(s => s.done).length;
+                  const totalSubs = (task.subtasks || []).length;
+                  const commentCount = (task.comments || []).length;
+                  const overdue = task.deadline && new Date(task.deadline) < new Date() && col.id !== "done";
+                  return (
+                    <div
+                      key={task._id}
+                      draggable
+                      onDragStart={(e) => onDragStart(e, task)}
+                      onClick={() => setOpenTask(task)}
+                      style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, cursor: "pointer", transition: "border-color .15s, transform .15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = C.borderH || C.accent + "44"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; }}
+                    >
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6, marginBottom: 8 }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 20, background: priorityColor(task.priority) + "22", color: priorityColor(task.priority), textTransform: "uppercase", letterSpacing: ".04em" }}>{task.priority || "med"}</span>
+                        {overdue && <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 20, background: C.red + "22", color: C.red, textTransform: "uppercase" }}>Overdue</span>}
+                      </div>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: C.t1, marginBottom: 8, lineHeight: 1.35 }}>{task.title}</p>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }} title={task.assignedTo?.name || "Unassigned"}>
+                          <div style={{ width: 22, height: 22, borderRadius: 7, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: C.accent }}>
+                            {(task.assignedTo?.name || "?")[0]?.toUpperCase()}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, color: C.t2 }}>
+                          {totalSubs > 0 && <span style={{ display: "flex", alignItems: "center", gap: 3 }} title="Subtasks"><CheckSquare size={11} />{doneSubs}/{totalSubs}</span>}
+                          {commentCount > 0 && <span style={{ display: "flex", alignItems: "center", gap: 3 }} title="Comments"><MessageSquare size={11} />{commentCount}</span>}
+                          {task.deadline && <span style={{ fontSize: 10, color: overdue ? C.red : C.t3 }}>{new Date(task.deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              {task.deadline && (
-                <span style={{ fontSize: 11, color: C.t3 }}>Due: {new Date(task.deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
-              )}
             </div>
-            {!isAdmin(user) && task.status !== "completed" && (
-              <button className="btn-success" style={{ width: "100%", justifyContent: "center" }} onClick={() => updateStatus(task._id, "completed")}>
-                <CheckCircle2 size={13} /> Mark Complete
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <Modal open={modal} onClose={() => setModal(false)} title="Assign Task">
+      {/* New Task Modal */}
+      <Modal open={modal} onClose={() => setModal(false)} title="New Task" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <FormField label="Task Title"><Inp value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Task title…" /></FormField>
-          <FormField label="Description"><textarea className="inp" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Task description…" rows={3} style={{ resize: "vertical" }} /></FormField>
-          <FormField label="Assign To">
-            <select value={form.assignedTo} onChange={e => setForm(p => ({ ...p, assignedTo: e.target.value }))} className="inp">
-              <option value="">Select employee…</option>
-              {users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
-            </select>
-          </FormField>
-          <FormField label="Priority">
-            <select value={form.priority} onChange={e => setForm(p => ({ ...p, priority: e.target.value }))} className="inp">
-              <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
-            </select>
-          </FormField>
-          <FormField label="Deadline"><Inp value={form.deadline} onChange={e => setForm(p => ({ ...p, deadline: e.target.value }))} type="date" /></FormField>
+          <FormField label="Title *"><Inp value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="What needs to be done?" /></FormField>
+          <FormField label="Description"><textarea className="inp" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Details, context, links..." rows={3} style={{ resize: "vertical" }} /></FormField>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Assign To *">
+              <select value={form.assignedTo} onChange={e => setForm(p => ({ ...p, assignedTo: e.target.value }))} className="inp">
+                <option value="">Select…</option>
+                {users.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Priority">
+              <select value={form.priority} onChange={e => setForm(p => ({ ...p, priority: e.target.value }))} className="inp">
+                <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+              </select>
+            </FormField>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormField label="Column">
+              <select value={form.column} onChange={e => setForm(p => ({ ...p, column: e.target.value }))} className="inp">
+                {KANBAN_COLS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Deadline"><Inp value={form.deadline} onChange={e => setForm(p => ({ ...p, deadline: e.target.value }))} type="date" /></FormField>
+          </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button className="btn-ghost" onClick={() => setModal(false)}>Cancel</button>
-            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Assign Task"}</button>
+            <button className="btn-pri" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Create Task"}</button>
           </div>
         </div>
       </Modal>
+
+      {/* Task Detail Modal */}
+      {openTask && (
+        <TaskDetailModal
+          task={openTask}
+          onClose={() => setOpenTask(null)}
+          onChange={(updated) => { setTasks(prev => prev.map(t => t._id === updated._id ? updated : t)); setOpenTask(updated); }}
+          onDelete={() => deleteTask(openTask._id)}
+          onMove={(col) => moveCard(openTask, col)}
+          addToast={addToast}
+          user={user}
+        />
+      )}
     </PageShell>
+  );
+}
+
+// ─── TASK DETAIL MODAL (subtasks + comments) ──────────────────────────────────
+function TaskDetailModal({ task, onClose, onChange, onDelete, onMove, addToast, user }) {
+  const [subInput, setSubInput] = useState("");
+  const [commentInput, setCommentInput] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const doneSubs = (task.subtasks || []).filter(s => s.done).length;
+  const totalSubs = (task.subtasks || []).length;
+  const progress = totalSubs ? Math.round((doneSubs / totalSubs) * 100) : 0;
+
+  const addSubtask = async () => {
+    if (!subInput.trim()) return;
+    setBusy(true);
+    try {
+      const r = await apiFetch(`/tasks/${task._id}/subtasks`, { method: "POST", body: JSON.stringify({ title: subInput.trim() }) });
+      const d = await r.json();
+      if (d?.data) onChange(d.data);
+      setSubInput("");
+    } catch { addToast("Failed to add subtask", "error"); }
+    setBusy(false);
+  };
+
+  const toggleSub = async (sub) => {
+    try {
+      const r = await apiFetch(`/tasks/${task._id}/subtasks/${sub._id}`, { method: "PATCH", body: JSON.stringify({ done: !sub.done }) });
+      const d = await r.json();
+      if (d?.data) onChange(d.data);
+    } catch { addToast("Failed", "error"); }
+  };
+
+  const deleteSub = async (sub) => {
+    try {
+      const r = await apiFetch(`/tasks/${task._id}/subtasks/${sub._id}`, { method: "DELETE" });
+      const d = await r.json();
+      if (d?.data) onChange(d.data);
+    } catch { addToast("Failed", "error"); }
+  };
+
+  const addComment = async () => {
+    if (!commentInput.trim()) return;
+    setBusy(true);
+    try {
+      const r = await apiFetch(`/tasks/${task._id}/comments`, { method: "POST", body: JSON.stringify({ text: commentInput.trim() }) });
+      const d = await r.json();
+      if (d?.data) onChange(d.data);
+      setCommentInput("");
+    } catch { addToast("Failed to add comment", "error"); }
+    setBusy(false);
+  };
+
+  const deleteComment = async (c) => {
+    try {
+      const r = await apiFetch(`/tasks/${task._id}/comments/${c._id}`, { method: "DELETE" });
+      const d = await r.json();
+      if (d?.data) onChange(d.data);
+    } catch { addToast("Failed", "error"); }
+  };
+
+  const priorityColor = p => p === "high" ? C.red : p === "medium" ? C.amber : C.green;
+
+  return (
+    <Modal open={true} onClose={onClose} title={task.title} width={720}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Header row */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20, background: priorityColor(task.priority) + "22", color: priorityColor(task.priority), textTransform: "uppercase" }}>{task.priority || "med"}</span>
+            <select value={task.column || "backlog"} onChange={e => onMove(e.target.value)} className="inp" style={{ width: 150, fontSize: 12, padding: "4px 8px" }}>
+              {KANBAN_COLS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+            <span style={{ fontSize: 12, color: C.t2 }}>Assigned to <strong style={{ color: C.t1 }}>{task.assignedTo?.name || "—"}</strong></span>
+            {task.deadline && <span style={{ fontSize: 11, color: C.t3 }}>Due {new Date(task.deadline).toLocaleDateString("en-IN")}</span>}
+          </div>
+          {isAdmin(user) && (
+            <button className="btn-icon" style={{ background: C.redG, color: C.red }} onClick={onDelete} title="Delete task"><Trash2 size={13} /></button>
+          )}
+        </div>
+
+        {/* Description */}
+        {task.description && (
+          <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, fontSize: 13, color: C.t2, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{task.description}</div>
+        )}
+
+        {/* Subtasks */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <p style={{ fontSize: 12, color: C.t2, textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700 }}>Subtasks {totalSubs > 0 && `(${doneSubs}/${totalSubs})`}</p>
+            {totalSubs > 0 && <span style={{ fontSize: 11, color: C.t3 }}>{progress}%</span>}
+          </div>
+          {totalSubs > 0 && (
+            <div style={{ height: 4, background: C.panel, borderRadius: 2, marginBottom: 10, overflow: "hidden" }}>
+              <div style={{ width: `${progress}%`, height: "100%", background: C.green, transition: "width .25s" }} />
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {(task.subtasks || []).map(sub => (
+              <div key={sub._id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                <input type="checkbox" checked={!!sub.done} onChange={() => toggleSub(sub)} style={{ accentColor: C.green, cursor: "pointer" }} />
+                <span style={{ flex: 1, fontSize: 13, color: sub.done ? C.t3 : C.t1, textDecoration: sub.done ? "line-through" : "none" }}>{sub.title}</span>
+                <button onClick={() => deleteSub(sub)} style={{ background: "transparent", border: "none", color: C.t3, cursor: "pointer", padding: 4 }}><X size={13} /></button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <Inp value={subInput} onChange={e => setSubInput(e.target.value)} placeholder="Add subtask…" onKeyDown={e => e.key === "Enter" && addSubtask()} />
+            <button className="btn-ghost" onClick={addSubtask} disabled={busy || !subInput.trim()}><Plus size={13} />Add</button>
+          </div>
+        </div>
+
+        {/* Comments */}
+        <div>
+          <p style={{ fontSize: 12, color: C.t2, textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, marginBottom: 8 }}>Comments {(task.comments || []).length > 0 && `(${task.comments.length})`}</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 240, overflowY: "auto" }}>
+            {(task.comments || []).length === 0 && <p style={{ fontSize: 12, color: C.t3, fontStyle: "italic" }}>No comments yet</p>}
+            {(task.comments || []).map(c => (
+              <div key={c._id} style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 6, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: C.accent }}>
+                      {(c.userName || "?")[0]?.toUpperCase()}
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{c.userName || "Unknown"}</span>
+                    <span style={{ fontSize: 10, color: C.t3 }}>{c.createdAt ? new Date(c.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}</span>
+                  </div>
+                  {(c.user === user?._id || c.user?.toString?.() === user?._id || isAdmin(user)) && (
+                    <button onClick={() => deleteComment(c)} style={{ background: "transparent", border: "none", color: C.t3, cursor: "pointer", padding: 2 }}><X size={11} /></button>
+                  )}
+                </div>
+                <p style={{ fontSize: 13, color: C.t1, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{c.text}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <Inp value={commentInput} onChange={e => setCommentInput(e.target.value)} placeholder="Write a comment…" onKeyDown={e => e.key === "Enter" && addComment()} />
+            <button className="btn-pri" onClick={addComment} disabled={busy || !commentInput.trim()}><Send size={13} />Post</button>
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
