@@ -2517,7 +2517,6 @@ function AttendancePage({ addToast, user }) {
   const [search, setSearch] = useState("");
   const [liveTime, setLiveTime] = useState(new Date());
   useEffect(() => {
-    if (isAdmin(user)) return;
     const t = setInterval(() => setLiveTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
@@ -2530,12 +2529,12 @@ function AttendancePage({ addToast, user }) {
     setLoading(true);
     try {
       if (isAdmin(user)) {
-        const [aR, uR, sR] = await Promise.allSettled([
+        const [aR, uR, sR, tR] = await Promise.allSettled([
           apiFetch(tab === "monthly" ? `/attendance?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
           apiFetch("/users").then(r => r.json()),
           apiFetch("/company").then(r => r.json()),
+          apiFetch("/attendance/today").then(r => r.json()),
         ]);
-        // normalize: backend returns user field, frontend expects userId
         const recs = safeArr(aR.value, "attendance", "records", "data").map(r => ({
           ...r,
           userId: r.userId || r.user,
@@ -2544,10 +2543,13 @@ function AttendancePage({ addToast, user }) {
         setRecords(recs);
         setUsers(safeArr(uR.value, "users", "data"));
         setSettings(sR.value?.company || sR.value);
+        // admin gets their own today record for check-in/out card
+        setTodayRec(tR.value?.attendance || null);
       } else {
-        const [aR, sR] = await Promise.allSettled([
+        const [aR, sR, tR] = await Promise.allSettled([
           apiFetch(tab === "monthly" ? `/attendance/monthly?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
           apiFetch("/company").then(r => r.json()),
+          apiFetch("/attendance/today").then(r => r.json()),
         ]);
         const recs = safeArr(aR.value, "attendance", "records", "data").map(r => ({
           ...r,
@@ -2556,8 +2558,8 @@ function AttendancePage({ addToast, user }) {
         }));
         setRecords(recs);
         setSettings(sR.value?.company || sR.value);
-        const today = new Date().toDateString();
-        setTodayRec(recs.find(r => r.date && new Date(r.date).toDateString() === today) || null);
+        // prefer the live /today endpoint over searching the list
+        setTodayRec(tR.value?.attendance || recs.find(r => r.date && new Date(r.date).toDateString() === new Date().toDateString()) || null);
       }
     } catch { addToast("Failed to load attendance", "error"); }
     setLoading(false);
@@ -2637,7 +2639,7 @@ function AttendancePage({ addToast, user }) {
         ))}
       </div>
 
-      {!isAdmin(user) && (() => {
+      {(() => {
         const sessionActive = todayRec?.sessionActive || (todayRec?.checkIn && !todayRec?.checkOut);
         const sessionDone   = !!todayRec?.checkOut;
         const elapsedSecs   = todayRec?.checkIn && !sessionDone ? Math.floor((liveTime - new Date(todayRec.checkIn)) / 1000) : 0;
