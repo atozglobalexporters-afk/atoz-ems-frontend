@@ -1161,6 +1161,7 @@ function DashboardPage({ addToast, user, setPage }) {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [liveTime, setLiveTime]     = useState(new Date());
   const [elapsed, setElapsed]       = useState(0);
+  const [quote, setQuote]           = useState(null);
 
   // Live clock
   useEffect(() => {
@@ -1215,6 +1216,11 @@ function DashboardPage({ addToast, user, setPage }) {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Quote of the Day
+  useEffect(() => {
+    apiFetch("/quote").then(r => r.json()).then(d => setQuote(d)).catch(() => {});
+  }, []);
 
   // ── EMPLOYEE SESSION ACTIONS ──────────────────────────────────────────────
   const handleStartSession = async () => {
@@ -1309,6 +1315,28 @@ function DashboardPage({ addToast, user, setPage }) {
             </p>
           </div>
         </div>
+
+        {/* ── Quote of the Day ── */}
+        {quote?.quote && (
+          <div style={{
+            background: `linear-gradient(135deg, ${C.accent}18, ${C.purple || C.accent}10)`,
+            border: `1px solid ${C.accent}33`,
+            borderRadius: 14,
+            padding: "14px 20px",
+            marginBottom: 18,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+          }}>
+            <div style={{ fontSize: 28, lineHeight: 1, color: C.accent, fontFamily: "Georgia, serif" }}>"</div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 14, color: C.t1, fontStyle: "italic", fontWeight: 500, lineHeight: 1.4 }}>
+                {quote.quote}
+              </p>
+              <p style={{ fontSize: 11, color: C.t2, marginTop: 4, fontWeight: 600 }}>— {quote.author}</p>
+            </div>
+          </div>
+        )}
 
         {/* ── Top Stat Cards ── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
@@ -2582,7 +2610,21 @@ function AttendancePage({ addToast, user }) {
     try {
       const r = await apiFetch("/attendance/checkout", { method: "POST" });
       if (!r.ok) throw new Error();
-      addToast("Checked out successfully", "success"); load();
+      addToast("Session ended", "success", {
+        label: "UNDO",
+        onClick: async () => {
+          try {
+            const ur = await apiFetch("/attendance/undo-checkout", { method: "POST" });
+            if (!ur.ok) {
+              const ud = await ur.json().catch(() => ({}));
+              throw new Error(ud.message || "Undo failed");
+            }
+            addToast("Session resumed", "success");
+            load();
+          } catch (e) { addToast(e.message || "Undo failed", "error"); }
+        }
+      });
+      load();
     } catch (e) { addToast(e.message || "Check-out failed", "error"); }
     setCheckLoading(false);
   };
@@ -3807,7 +3849,21 @@ function SalaryPage({ addToast, user }) {
             <span style={{ cursor: "pointer", color: C.accent }} onClick={() => setPayslipTarget(null)}>{isAdmin(user) ? "Salary Management" : "My Payslips"}</span>
             <ChevronRight size={12} /><span style={{ color: C.t2 }}>{MONTHS[(payslipTarget.month||1)-1]} {payslipTarget.year}</span>
           </div>
-          <button className="btn-ghost" style={{ marginLeft: "auto", gap: 6, fontSize: 13 }} onClick={() => window.print()}><Download size={14} />Print / Save PDF</button>
+          <button className="btn-ghost" style={{ marginLeft: "auto", gap: 6, fontSize: 13 }} onClick={async () => {
+            try {
+              const token = localStorage.getItem("ems_token");
+              const resp = await fetch(`${API}/payslips/${payslipTarget._id}/pdf`, { headers: { Authorization: `Bearer ${token}` } });
+              if (!resp.ok) throw new Error("Download failed");
+              const blob = await resp.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `payslip-${(payslipTarget.user?.name || "emp").replace(/\s/g,"_")}-${payslipTarget.month}-${payslipTarget.year}.pdf`;
+              document.body.appendChild(a); a.click(); a.remove();
+              URL.revokeObjectURL(url);
+              addToast("PDF downloaded", "success");
+            } catch (e) { addToast(e.message || "Download failed", "error"); }
+          }}><Download size={14} />Download PDF</button>
           {!isAdmin(user) && payslipTarget.status !== "queried" && (
             <button className="btn-ghost" style={{ gap: 6, fontSize: 13, color: C.amber, borderColor: C.amber + "44" }} onClick={() => { setQueryModal(payslipTarget); setQueryText(""); }}>
               <AlertCircle size={14} />Raise Query
