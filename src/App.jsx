@@ -505,42 +505,15 @@ function Modal({ open, onClose, title, children, width = 500 }) {
     if (open) document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [open, onClose]);
-  // Lock body scroll while modal is open so backdrop doesn't shift
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
   if (!open) return null;
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
-        display: "flex", alignItems: "flex-start", justifyContent: "center",
-        zIndex: 9999, padding: "24px 16px",
-        overflowY: "auto",
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        className="fadeUp"
-        style={{
-          background: C.panel, border: `1px solid ${C.border}`,
-          borderRadius: 20, width: "100%", maxWidth: width,
-          boxShadow: "0 32px 80px rgba(0,0,0,0.7)",
-          maxHeight: "calc(100vh - 48px)",
-          overflow: "hidden", display: "flex", flexDirection: "column",
-          marginTop: "auto", marginBottom: "auto",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} className="fadeUp" style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 20, width: "100%", maxWidth: width, boxShadow: "0 32px 80px rgba(0,0,0,0.7)", maxHeight: "88vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>{title}</h3>
           <button onClick={onClose} className="icon-btn" style={{ width: 28, height: 28, background: "transparent", border: "none" }}><X size={14} /></button>
         </div>
-        <div style={{ padding: 22, overflowY: "auto", flex: 1, minHeight: 0 }}>{children}</div>
+        <div style={{ padding: 22, overflowY: "auto", flex: 1 }}>{children}</div>
       </div>
     </div>
   );
