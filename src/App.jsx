@@ -6449,6 +6449,7 @@ function QuotesPage({ addToast, user }) {
   const [newText, setNewText] = useState("");
   const [newAuthor, setNewAuthor] = useState("");
   const [todayQuote, setTodayQuote] = useState(null);
+  const [shuffling, setShuffling] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -6465,28 +6466,63 @@ function QuotesPage({ addToast, user }) {
     setLoading(false);
   }, [page, source, search]);
 
+  const loadToday = useCallback(() => {
+    apiFetch("/quote").then(r=>r.json()).then(d=>setTodayQuote(d)).catch(()=>{});
+  }, []);
+
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { apiFetch("/quote").then(r=>r.json()).then(d=>setTodayQuote(d)).catch(()=>{}); }, []);
+  useEffect(() => { loadToday(); }, [loadToday]);
+
+  const handleShuffle = async () => {
+    setShuffling(true);
+    try {
+      const r = await apiFetch("/quote/shuffle", { method: "POST", body: JSON.stringify({}) });
+      if (!r.ok) throw new Error();
+      addToast("Today's quote shuffled", "success");
+      loadToday();
+    } catch { addToast("Shuffle failed", "error"); }
+    setShuffling(false);
+  };
+
+  const handlePickThis = async q => {
+    try {
+      const r = await apiFetch("/quote/shuffle", { method: "POST", body: JSON.stringify({ quoteText: q.text, quoteAuthor: q.author }) });
+      if (!r.ok) throw new Error();
+      addToast(`Today's quote set to: "${q.text.slice(0, 40)}..."`, "success");
+      loadToday();
+    } catch { addToast("Failed to pin quote", "error"); }
+  };
+
+  const handleClearOverride = async () => {
+    try {
+      const r = await apiFetch("/quote/shuffle", { method: "POST", body: JSON.stringify({ clear: true }) });
+      if (!r.ok) throw new Error();
+      addToast("Cleared override — back to daily rotation", "success");
+      loadToday();
+    } catch { addToast("Clear failed", "error"); }
+  };
 
   const handleSave = async () => {
     if (!newText.trim()) { addToast("Quote text required", "error"); return; }
     try {
       if (editing && editing.source === "custom") {
         const r = await apiFetch(`/quotes/${editing._id}`, { method: "PUT", body: JSON.stringify({ text: newText, author: newAuthor }) });
-        if (!r.ok) throw new Error();
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.message || "Update failed");
         addToast("Quote updated", "success");
       } else {
         const r = await apiFetch("/quotes", { method: "POST", body: JSON.stringify({ text: newText, author: newAuthor || "Anonymous" }) });
-        if (!r.ok) throw new Error();
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.message || "Add failed");
         addToast("Quote added", "success");
       }
       setShowAdd(false); setEditing(null); setNewText(""); setNewAuthor("");
       load();
-    } catch { addToast("Save failed", "error"); }
+    } catch (e) { addToast(e.message || "Save failed", "error"); }
   };
 
   const handleDelete = async q => {
-    if (q.source === "file") { addToast("Built-in quotes can't be deleted (you can edit by adding a new one)", "info"); return; }
+    if (q.source === "file") { addToast("Built-in quotes can't be deleted (only hidden via toggle — not implemented yet)", "info"); return; }
     if (!confirm("Delete this quote?")) return;
     try {
       const r = await apiFetch(`/quotes/${q._id}`, { method: "DELETE" });
@@ -6511,17 +6547,31 @@ function QuotesPage({ addToast, user }) {
 
   return (
     <PageShell title="Daily Quotes" subtitle={`${fileCount} built-in + ${customCount} custom · displayed daily on dashboards`}>
-      {/* Today's quote preview */}
+      {/* Today's quote preview with shuffle controls */}
       {todayQuote?.quote && (
-        <div style={{ background: `linear-gradient(135deg, ${C.accent}18, ${C.purple || C.accent}10)`, border: `1px solid ${C.accent}33`, borderRadius: 14, padding: "16px 22px", marginBottom: 18, display: "flex", alignItems: "center", gap: 14 }}>
-          <Sparkles size={22} color={C.accent} />
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 10, color: C.t2, fontWeight: 700, letterSpacing: ".08em", marginBottom: 4 }}>TODAY'S QUOTE</p>
-            <p style={{ fontSize: 14, color: C.t1, fontStyle: "italic", fontWeight: 500 }}>"{todayQuote.quote}"</p>
-            <p style={{ fontSize: 11, color: C.t2, marginTop: 4, fontWeight: 600 }}>— {todayQuote.author}</p>
+        <div style={{ background: `linear-gradient(135deg, ${C.accent}18, ${C.purple || C.accent}10)`, border: `1px solid ${C.accent}33`, borderRadius: 14, padding: "16px 22px", marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <Sparkles size={22} color={C.accent} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 10, color: C.t2, fontWeight: 700, letterSpacing: ".08em", marginBottom: 4 }}>
+                TODAY'S QUOTE {todayQuote.overridden && <span style={{ color: C.amber, marginLeft: 8 }}>· OVERRIDDEN</span>}
+              </p>
+              <p style={{ fontSize: 14, color: C.t1, fontStyle: "italic", fontWeight: 500 }}>"{todayQuote.quote}"</p>
+              <p style={{ fontSize: 11, color: C.t2, marginTop: 4, fontWeight: 600 }}>— {todayQuote.author}</p>
+            </div>
           </div>
-          <div style={{ fontSize: 10, color: C.t3, textAlign: "right" }}>
-            Pool size:<br/><b style={{ color: C.t1, fontSize: 14 }}>{todayQuote.poolSize || (fileCount + customCount)}</b>
+          <div style={{ display: "flex", gap: 8, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}`, flexWrap: "wrap" }}>
+            <button className="btn-pri" onClick={handleShuffle} disabled={shuffling} style={{ gap: 6, fontSize: 12 }}>
+              <RefreshCw size={13} />{shuffling ? "Shuffling..." : "Shuffle Random"}
+            </button>
+            {todayQuote.overridden && (
+              <button className="btn-ghost" onClick={handleClearOverride} style={{ gap: 6, fontSize: 12 }}>
+                <X size={13} />Clear Override (back to daily rotation)
+              </button>
+            )}
+            <span style={{ fontSize: 11, color: C.t3, alignSelf: "center", marginLeft: "auto" }}>
+              Tip: click "Pick this" on any quote below to set as today's
+            </span>
           </div>
         </div>
       )}
@@ -6565,6 +6615,9 @@ function QuotesPage({ addToast, user }) {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
+                <button className="btn-ghost" onClick={() => handlePickThis(q)} title="Set as today's quote" style={{ fontSize: 11, padding: "5px 10px", gap: 4 }}>
+                  <Star size={12} />Pick this
+                </button>
                 {q.source === "custom" && (
                   <button className="btn-icon" onClick={() => openEdit(q)} title="Edit"><Edit2 size={14} /></button>
                 )}
