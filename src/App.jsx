@@ -12,7 +12,7 @@ import {
   CreditCard, PieChart as PieIcon, Layers, Tag,
   Target, CheckSquare, Send, UserCheck, AlignLeft,
   Hash, Globe, Award, Eye, EyeOff, Copy,
-  Smartphone, Monitor, Lock, Megaphone, Download,
+  Smartphone, Monitor, Lock, Megaphone, Download, Sparkles, Quote,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar,
@@ -102,6 +102,7 @@ const ADMIN_NAV = [
   { section: "COMMUNICATION", items: [
     { id:"chat",          label:"Chat",                icon: MessageSquare },
     { id:"announcements", label:"Announcements",       icon: Bell },
+    { id:"quotes",        label:"Daily Quotes",        icon: Sparkles },
   ]},
   { section: "SYSTEM", items: [
     { id:"company",       label:"Settings",            icon: Settings },
@@ -6431,6 +6432,177 @@ function NotificationsPage({ addToast, user }) {
   );
 }
 
+
+// ─── DAILY QUOTES ─────────────────────────────────────────────────────────────
+function QuotesPage({ addToast, user }) {
+  const [quotes, setQuotes] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [fileCount, setFileCount] = useState(0);
+  const [customCount, setCustomCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [source, setSource] = useState("all");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [newText, setNewText] = useState("");
+  const [newAuthor, setNewAuthor] = useState("");
+  const [todayQuote, setTodayQuote] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: "50", source });
+      if (search) params.set("search", search);
+      const r = await apiFetch(`/quotes?${params}`).then(r => r.json());
+      setQuotes(r.quotes || []);
+      setTotal(r.total || 0);
+      setTotalPages(r.totalPages || 1);
+      setFileCount(r.fileCount || 0);
+      setCustomCount(r.customCount || 0);
+    } catch { addToast("Failed to load quotes", "error"); }
+    setLoading(false);
+  }, [page, source, search]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { apiFetch("/quote").then(r=>r.json()).then(d=>setTodayQuote(d)).catch(()=>{}); }, []);
+
+  const handleSave = async () => {
+    if (!newText.trim()) { addToast("Quote text required", "error"); return; }
+    try {
+      if (editing && editing.source === "custom") {
+        const r = await apiFetch(`/quotes/${editing._id}`, { method: "PUT", body: JSON.stringify({ text: newText, author: newAuthor }) });
+        if (!r.ok) throw new Error();
+        addToast("Quote updated", "success");
+      } else {
+        const r = await apiFetch("/quotes", { method: "POST", body: JSON.stringify({ text: newText, author: newAuthor || "Anonymous" }) });
+        if (!r.ok) throw new Error();
+        addToast("Quote added", "success");
+      }
+      setShowAdd(false); setEditing(null); setNewText(""); setNewAuthor("");
+      load();
+    } catch { addToast("Save failed", "error"); }
+  };
+
+  const handleDelete = async q => {
+    if (q.source === "file") { addToast("Built-in quotes can't be deleted (you can edit by adding a new one)", "info"); return; }
+    if (!confirm("Delete this quote?")) return;
+    try {
+      const r = await apiFetch(`/quotes/${q._id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      addToast("Quote deleted", "success", {
+        label: "UNDO",
+        onClick: async () => {
+          await apiFetch("/quotes", { method: "POST", body: JSON.stringify({ text: q.text, author: q.author }) });
+          load();
+        }
+      });
+      load();
+    } catch { addToast("Delete failed", "error"); }
+  };
+
+  const openEdit = q => {
+    setEditing(q); setNewText(q.text); setNewAuthor(q.author || ""); setShowAdd(true);
+  };
+  const openAdd = () => {
+    setEditing(null); setNewText(""); setNewAuthor(""); setShowAdd(true);
+  };
+
+  return (
+    <PageShell title="Daily Quotes" subtitle={`${fileCount} built-in + ${customCount} custom · displayed daily on dashboards`}>
+      {/* Today's quote preview */}
+      {todayQuote?.quote && (
+        <div style={{ background: `linear-gradient(135deg, ${C.accent}18, ${C.purple || C.accent}10)`, border: `1px solid ${C.accent}33`, borderRadius: 14, padding: "16px 22px", marginBottom: 18, display: "flex", alignItems: "center", gap: 14 }}>
+          <Sparkles size={22} color={C.accent} />
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 10, color: C.t2, fontWeight: 700, letterSpacing: ".08em", marginBottom: 4 }}>TODAY'S QUOTE</p>
+            <p style={{ fontSize: 14, color: C.t1, fontStyle: "italic", fontWeight: 500 }}>"{todayQuote.quote}"</p>
+            <p style={{ fontSize: 11, color: C.t2, marginTop: 4, fontWeight: 600 }}>— {todayQuote.author}</p>
+          </div>
+          <div style={{ fontSize: 10, color: C.t3, textAlign: "right" }}>
+            Pool size:<br/><b style={{ color: C.t1, fontSize: 14 }}>{todayQuote.poolSize || (fileCount + customCount)}</b>
+          </div>
+        </div>
+      )}
+
+      {/* Controls */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ flex: 1, minWidth: 240, position: "relative" }}>
+          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.t3 }} />
+          <Inp value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search quotes or authors..." style={{ paddingLeft: 36 }} />
+        </div>
+        <select value={source} onChange={e => { setSource(e.target.value); setPage(1); }} style={{ padding: "10px 12px", background: C.panel, border: `1px solid ${C.border}`, color: C.t1, borderRadius: 10, fontSize: 13, minWidth: 140 }}>
+          <option value="all">All sources</option>
+          <option value="custom">Custom only</option>
+          <option value="file">Built-in only</option>
+        </select>
+        <button className="btn-pri" onClick={openAdd} style={{ gap: 6 }}><Plus size={14} />Add Quote</button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 16 }}>
+        <StatCard label="Total Pool" value={fileCount + customCount} color={C.accent} icon={Quote} />
+        <StatCard label="Built-in" value={fileCount} color={C.blue} />
+        <StatCard label="Custom" value={customCount} color={C.green} />
+        <StatCard label="Filtered" value={total} color={C.amber} />
+      </div>
+
+      {/* List */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+        {loading ? (
+          <div style={{ padding: 40, textAlign: "center" }}><Sk h={20} w="50%" /></div>
+        ) : quotes.length === 0 ? (
+          <div style={{ padding: 40, textAlign: "center", color: C.t3 }}>No quotes match your filter.</div>
+        ) : (
+          quotes.map(q => (
+            <div key={q._id} style={{ padding: "14px 18px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, color: C.t1, fontStyle: "italic", lineHeight: 1.5 }}>"{q.text}"</p>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+                  <span style={{ fontSize: 11, color: C.t2, fontWeight: 600 }}>— {q.author}</span>
+                  <Badge label={q.source === "custom" ? "CUSTOM" : "BUILT-IN"} color={q.source === "custom" ? C.green : C.blue} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {q.source === "custom" && (
+                  <button className="btn-icon" onClick={() => openEdit(q)} title="Edit"><Edit2 size={14} /></button>
+                )}
+                <button className="btn-icon" onClick={() => handleDelete(q)} title={q.source === "file" ? "Built-in cannot be removed" : "Delete"} style={{ opacity: q.source === "file" ? 0.4 : 1 }}><Trash2 size={14} /></button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 14 }}>
+          <button className="btn-ghost" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}><ChevronLeft size={14} />Prev</button>
+          <span style={{ fontSize: 13, color: C.t2 }}>Page {page} of {totalPages}</span>
+          <button className="btn-ghost" disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next<ChevronRight size={14} /></button>
+        </div>
+      )}
+
+      {/* Add/Edit modal */}
+      {showAdd && (
+        <Modal title={editing ? "Edit Quote" : "Add Quote"} onClose={() => { setShowAdd(false); setEditing(null); }}>
+          <FormField label="Quote Text" required>
+            <textarea value={newText} onChange={e => setNewText(e.target.value)} rows={4} placeholder="Type the quote..." style={{ width: "100%", padding: "10px 12px", background: C.panel, border: `1px solid ${C.border}`, color: C.t1, borderRadius: 10, fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
+          </FormField>
+          <FormField label="Author / Source" hint="e.g., Quran 2:275, Bukhari, Imam Ash-Shafi'i, Steve Jobs, or leave blank for Anonymous">
+            <Inp value={newAuthor} onChange={e => setNewAuthor(e.target.value)} placeholder="Author or source" />
+          </FormField>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+            <button className="btn-ghost" onClick={() => { setShowAdd(false); setEditing(null); }}>Cancel</button>
+            <button className="btn-pri" onClick={handleSave}>{editing ? "Save Changes" : "Add Quote"}</button>
+          </div>
+        </Modal>
+      )}
+    </PageShell>
+  );
+}
+
 // ─── ANNOUNCEMENTS ────────────────────────────────────────────────────────────
 function AnnouncementsPage({ addToast, user }) {
   const [announcements, setAnnouncements] = useState([]);
@@ -6772,6 +6944,7 @@ export default function App() {
     audit:         <AuditPage         {...props} />,
     profile:       <ProfilePage       {...props} />,
     announcements: <AnnouncementsPage {...props} />,
+    quotes:        <QuotesPage        {...props} />,
     notifications: <NotificationsPage {...props} />,
     tools:         <ToolsPage />,
     chat:          <ChatPage user={{ id: user?._id || user?.id, name: user?.name, role: user?.role }} addToast={addToast} />,
