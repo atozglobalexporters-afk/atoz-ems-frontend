@@ -521,7 +521,7 @@ function Modal({ open, onClose, title, children, width = 500 }) {
         background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         zIndex: 9999, padding: "24px 16px",
-        overflowY: "auto",   // fallback: if modal is taller than viewport, overlay scrolls
+        overflowY: "auto",
       }}
     >
       <div
@@ -531,9 +531,9 @@ function Modal({ open, onClose, title, children, width = 500 }) {
           background: C.panel, border: `1px solid ${C.border}`,
           borderRadius: 20, width: "100%", maxWidth: width,
           boxShadow: "0 32px 80px rgba(0,0,0,0.7)",
-          maxHeight: "calc(100vh - 48px)",      // accounts for top+bottom overlay padding
-          margin: "auto",                         // center vertically when room allows, stick top otherwise
+          maxHeight: "calc(100vh - 48px)",
           overflow: "hidden", display: "flex", flexDirection: "column",
+          marginTop: "auto", marginBottom: "auto",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
