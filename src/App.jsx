@@ -25,8 +25,24 @@ import ToolsPage from "./ToolsPage";
 // ─── API ──────────────────────────────────────────────────────────────────────
 const API = "https://nexus-backend-production-771f.up.railway.app/api";
 const getToken = () => localStorage.getItem("ems_token") || "";
-const apiFetch = (path, opts = {}) =>
-  fetch(`${API}${path}`, {
+
+// Single-shot 401 handler: clear session + redirect to login.
+// Guarded so a storm of parallel 401s only triggers ONE redirect.
+let __authExpiredFired = false;
+function handleAuthExpired() {
+  if (__authExpiredFired) return;
+  __authExpiredFired = true;
+  try {
+    localStorage.removeItem("ems_token");
+    localStorage.removeItem("ems_user");
+    localStorage.removeItem("ems_remember");
+  } catch {}
+  // Tiny delay so any in-flight toast/log can flush, then hard reload to LoginPage
+  setTimeout(() => { try { window.location.reload(); } catch {} }, 50);
+}
+
+const apiFetch = async (path, opts = {}) => {
+  const res = await fetch(`${API}${path}`, {
     ...opts,
     headers: {
       "Content-Type": "application/json",
@@ -34,6 +50,13 @@ const apiFetch = (path, opts = {}) =>
       ...(opts.headers || {}),
     },
   });
+  // Auto-logout on expired/invalid token. Skip auth endpoints so a bad login
+  // attempt doesn't nuke the page (the LoginPage handles its own 401).
+  if (res.status === 401 && !path.startsWith("/auth/login") && !path.startsWith("/auth/forgot-password") && !path.startsWith("/auth/reset-password")) {
+    handleAuthExpired();
+  }
+  return res;
+};
 const safeArr = (d, ...keys) => {
   if (Array.isArray(d)) return d;
   for (const k of keys) if (d && Array.isArray(d[k])) return d[k];
