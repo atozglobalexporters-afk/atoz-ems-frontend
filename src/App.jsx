@@ -386,7 +386,7 @@ const injectCSS = () => {
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.07);
       cursor: text; transition: all 0.18s;
-      flex: 1; max-width: 380px;
+      flex: 1 1 auto; min-width: 0; max-width: 340px;
     }
     .search-bar:hover { border-color: rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); }
 
@@ -397,6 +397,7 @@ const injectCSS = () => {
       color: ${C.t2}; background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.07);
       cursor: pointer; transition: all 0.18s;
+      flex-shrink: 0;
     }
     .icon-btn:hover { color: ${C.accent}; border-color: rgba(99,102,241,0.35); background: rgba(99,102,241,0.08); }
 
@@ -504,15 +505,42 @@ function Modal({ open, onClose, title, children, width = 500 }) {
     if (open) document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
   }, [open, onClose]);
+  // Lock body scroll while modal is open so backdrop doesn't shift
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
   if (!open) return null;
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} className="fadeUp" style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 20, width: "100%", maxWidth: width, boxShadow: "0 32px 80px rgba(0,0,0,0.7)", maxHeight: "88vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0,
+        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)",
+        display: "flex", alignItems: "flex-start", justifyContent: "center",
+        zIndex: 9999, padding: "24px 16px",
+        overflowY: "auto",   // fallback: if modal is taller than viewport, overlay scrolls
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        className="fadeUp"
+        style={{
+          background: C.panel, border: `1px solid ${C.border}`,
+          borderRadius: 20, width: "100%", maxWidth: width,
+          boxShadow: "0 32px 80px rgba(0,0,0,0.7)",
+          maxHeight: "calc(100vh - 48px)",      // accounts for top+bottom overlay padding
+          margin: "auto",                         // center vertically when room allows, stick top otherwise
+          overflow: "hidden", display: "flex", flexDirection: "column",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>{title}</h3>
           <button onClick={onClose} className="icon-btn" style={{ width: 28, height: 28, background: "transparent", border: "none" }}><X size={14} /></button>
         </div>
-        <div style={{ padding: 22, overflowY: "auto", flex: 1 }}>{children}</div>
+        <div style={{ padding: 22, overflowY: "auto", flex: 1, minHeight: 0 }}>{children}</div>
       </div>
     </div>
   );
@@ -948,7 +976,7 @@ function GlobalSearch({ onNavigate, user }) {
   let flatIdx = 0;
 
   return (
-    <div style={{ position: "relative", flex: 1, maxWidth: 480 }} ref={dropRef}>
+    <div style={{ position: "relative", flex: "1 1 auto", minWidth: 0, maxWidth: 480 }} ref={dropRef}>
       <div className="search-bar" style={{ cursor: "text" }} onClick={() => { inputRef.current?.focus(); if (query) setOpen(true); }}>
         <Search size={13} color={C.t3} />
         <input
@@ -1067,11 +1095,11 @@ function TopBar({ clock, user, onNavigate, onToggleSidebar, onLogout }) {
   return (
     <div style={{
       height: 58, display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "0 22px", background: "rgba(8,10,20,0.95)",
+      padding: "0 18px", background: "rgba(8,10,20,0.95)",
       borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(20px)",
-      flexShrink: 0, gap: 16,
+      flexShrink: 0, gap: 12,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 auto", minWidth: 0 }}>
         <button
           onClick={onToggleSidebar}
           className="icon-btn"
@@ -1766,13 +1794,64 @@ function DashboardPage({ addToast, user, setPage }) {
     { title: "Company Offsite",    date: "30 May 2025",      color: C.amber,   icon: Building2 },
   ];
 
-  const activities = [
-    { name: "Priya Singh",  action: "marked attendance",        time: "2 minutes ago",  dot: C.green },
-    { name: "Rahul Verma",  action: "submitted work log",        time: "15 minutes ago", dot: C.red },
-    { name: "Amit Kumar",   action: "joined as new employee",    time: "1 hour ago",     dot: C.green },
-    { name: "Payroll",      action: "for April 2025 generated",  time: "2 hours ago",    dot: C.amber },
-    { name: "Neha Patel",   action: "leave request approved",    time: "3 hours ago",    dot: C.green },
-  ];
+  // ── Real activity feed from audit logs ──
+  // Map action codes to human-readable verbs + dot color
+  const ACTION_MAP = {
+    LOGIN:                 { verb: "logged in",                   dot: C.green },
+    LOGOUT:                { verb: "logged out",                  dot: C.t3 },
+    SYSTEM_SETUP:          { verb: "completed system setup",      dot: C.accent },
+    CREATE_EMPLOYEE:       { verb: "added a new employee",        dot: C.green },
+    UPDATE_USER:           { verb: "updated an employee profile", dot: C.accent },
+    DELETE_USER:           { verb: "removed an employee",         dot: C.red },
+    CREATE_HOLIDAY:        { verb: "added a holiday",             dot: C.amber },
+    DELETE_HOLIDAY:        { verb: "removed a holiday",           dot: C.red },
+    UPDATE_WORKLOG:        { verb: "updated a work log",          dot: C.cyan },
+    CREATE_SALARY:         { verb: "added a salary record",       dot: C.green },
+    UPDATE_COMPANY:        { verb: "updated company settings",    dot: C.accent },
+    CREATE_BUYER:          { verb: "added a buyer",               dot: C.blue },
+    GENERATE_PAYROLL:      { verb: "generated payroll",           dot: C.green },
+    CREATE_PAYROLL:        { verb: "created a payroll record",    dot: C.green },
+    UPDATE_EXPENSE:        { verb: "updated an expense",          dot: C.amber },
+    UPDATE_PAYSLIP:        { verb: "updated a payslip",           dot: C.amber },
+    ADMIN_OVERRIDE:        { verb: "applied an admin override",   dot: C.purple },
+    CREATE_ANNOUNCEMENT:   { verb: "posted an announcement",      dot: C.blue },
+    DELETE_ANNOUNCEMENT:   { verb: "removed an announcement",     dot: C.red },
+  };
+
+  const humanizeAction = (code) => {
+    if (ACTION_MAP[code]) return ACTION_MAP[code];
+    // Fallback: turn "DO_SOMETHING_NICE" → "did something nice"
+    const friendly = String(code || "")
+      .toLowerCase()
+      .replace(/_/g, " ")
+      .replace(/^(create|update|delete|add)/, (m) => ({ create: "created", update: "updated", delete: "deleted", add: "added" }[m] || m));
+    return { verb: friendly || "performed an action", dot: C.t2 };
+  };
+
+  const relativeTime = (d) => {
+    if (!d) return "";
+    const diff = Math.max(0, Date.now() - new Date(d).getTime());
+    const s = Math.floor(diff / 1000);
+    if (s < 45)              return "just now";
+    if (s < 90)              return "a minute ago";
+    const m = Math.floor(s / 60);
+    if (m < 60)              return `${m} minutes ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24)              return h === 1 ? "1 hour ago" : `${h} hours ago`;
+    const days = Math.floor(h / 24);
+    if (days < 7)            return days === 1 ? "1 day ago" : `${days} days ago`;
+    return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  };
+
+  const activities = (auditLogs || []).slice(0, 5).map(log => {
+    const { verb, dot } = humanizeAction(log.action);
+    return {
+      name: log.user?.name || "System",
+      action: verb,
+      time: relativeTime(log.createdAt),
+      dot,
+    };
+  });
 
   const sysStatus = [
     { label: "Server Status", status: "Operational", ok: true },
@@ -1927,12 +2006,17 @@ function DashboardPage({ addToast, user, setPage }) {
                 <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1 }}>Recent Activities</h2>
                 <button onClick={() => setPage("audit")} style={{ fontSize: 11, color: C.accent, fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>View All</button>
               </div>
-              {activities.map((a, i) => (
+              {activities.length === 0 ? (
+                <div style={{ padding: "32px 8px", textAlign: "center", color: C.t3, fontSize: 12 }}>
+                  No recent activity yet.<br />
+                  <span style={{ fontSize: 11 }}>Actions like logins, edits, and approvals will appear here.</span>
+                </div>
+              ) : activities.map((a, i) => (
                 <div key={i} className="activity-item">
                   <div style={{ width: 32, height: 32, borderRadius: 9, background: a.dot + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: a.dot, flexShrink: 0 }}>
-                    {a.name[0]}
+                    {(a.name?.[0] || "?").toUpperCase()}
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 12, color: C.t1, lineHeight: 1.4 }}>
                       <span style={{ fontWeight: 700 }}>{a.name}</span> {a.action}
                     </p>
@@ -2307,7 +2391,7 @@ function EmployeeDetailPage({ emp, onBack, addToast, user }) {
           {/* Manager info / join date */}
           <div className="card" style={{ padding: 20 }}>
             <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 16 }}>Employee Info</h3>
-            {[{ l: "Employee ID", v: emp.employeeId || "NEX-EMP-" + (emp._id?.slice(-4) || "0001") }, { l: "Email", v: emp.email }, { l: "Phone", v: emp.phone || "Not set" }, { l: "Department", v: emp.department || "—" }, { l: "Position", v: emp.position || "—" }, { l: "Join Date", v: emp.joinDate ? new Date(emp.joinDate).toLocaleDateString("en-IN") : emp.createdAt ? new Date(emp.createdAt).toLocaleDateString("en-IN") : "—" }, { l: "Manager", v: emp.manager || "Rohit Sharma" }].map(f => (
+            {[{ l: "Employee ID", v: emp.employeeId || "NEX-EMP-" + (emp._id?.slice(-4) || "0001") }, { l: "Email", v: emp.email }, { l: "Phone", v: emp.phone || "Not set" }, { l: "Department", v: emp.department || "—" }, { l: "Position", v: emp.position || "—" }, { l: "Join Date", v: emp.joinDate ? new Date(emp.joinDate).toLocaleDateString("en-IN") : emp.createdAt ? new Date(emp.createdAt).toLocaleDateString("en-IN") : "—" }, { l: "Manager", v: emp.manager || "Not assigned" }].map(f => (
               <div key={f.l} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 12, color: C.t3 }}>{f.l}</span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: C.t1 }}>{f.v}</span>
@@ -6716,8 +6800,38 @@ function AnnouncementsPage({ addToast, user }) {
   };
 
   const handleDelete = async (id) => {
-    try { await apiFetch(`/announcements/${id}`, { method: "DELETE" }); addToast("Deleted", "success"); load(); }
-    catch { addToast("Failed", "error"); }
+    // Find the announcement we're about to delete (so we can restore if undone)
+    const target = announcements.find(a => a._id === id);
+    if (!target) return;
+
+    // 1) Optimistically hide from UI
+    setAnnouncements(prev => prev.filter(a => a._id !== id));
+
+    // 2) Schedule the real backend DELETE after 10s
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        const r = await apiFetch(`/announcements/${id}`, { method: "DELETE" });
+        if (!r.ok) throw new Error();
+        // success — no further toast needed; the "Deleted" toast already showed
+      } catch {
+        // backend delete failed: restore locally so state matches server
+        addToast("Could not delete on server — restored", "error");
+        setAnnouncements(prev => prev.find(a => a._id === id) ? prev : [target, ...prev]);
+      }
+    }, 10000);
+
+    // 3) Show toast with UNDO action
+    addToast("Announcement deleted", "info", {
+      label: "UNDO",
+      onClick: () => {
+        cancelled = true;
+        clearTimeout(timer);
+        setAnnouncements(prev => prev.find(a => a._id === id) ? prev : [target, ...prev].sort((x, y) => new Date(y.createdAt) - new Date(x.createdAt)));
+        addToast("Restored", "success");
+      },
+    });
   };
 
   const priorityColor = p => p === "urgent" ? C.red : p === "high" ? C.amber : p === "normal" ? C.accent : C.t2;
