@@ -6662,7 +6662,7 @@ function QuotesPage({ addToast, user }) {
 
       {/* Add/Edit modal */}
       {showAdd && (
-        <Modal title={editing ? "Edit Quote" : "Add Quote"} onClose={() => { setShowAdd(false); setEditing(null); }}>
+        <Modal open={true} title={editing ? "Edit Quote" : "Add Quote"} onClose={() => { setShowAdd(false); setEditing(null); }}>
           <FormField label="Quote Text" required>
             <textarea value={newText} onChange={e => setNewText(e.target.value)} rows={4} placeholder="Type the quote..." style={{ width: "100%", padding: "10px 12px", background: C.panel, border: `1px solid ${C.border}`, color: C.t1, borderRadius: 10, fontSize: 13, resize: "vertical", fontFamily: "inherit" }} />
           </FormField>
