@@ -1088,6 +1088,7 @@ function TopBar({ clock, user, onNavigate, onToggleSidebar, onLogout }) {
       padding: "0 18px", background: "rgba(8,10,20,0.95)",
       borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(20px)",
       flexShrink: 0, gap: 12,
+      position: "relative", zIndex: 100,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "1 1 auto", minWidth: 0 }}>
         <button
