@@ -949,86 +949,103 @@ function GlobalSearch({ onNavigate, user }) {
   let flatIdx = 0;
 
   return (
-    <div style={{ position: "relative", flex: "1 1 auto", minWidth: 0, maxWidth: 480 }} ref={dropRef}>
-      <div className="search-bar" style={{ cursor: "text" }} onClick={() => { inputRef.current?.focus(); if (query) setOpen(true); }}>
-        <Search size={13} color={C.t3} />
+    <div style={{ position: "relative", flex: "1 1 auto", minWidth: 0, maxWidth: 420 }} ref={dropRef}>
+      {/* Search input — inline in topbar */}
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "8px 14px", borderRadius: 10,
+          background: "rgba(255,255,255,0.04)", border: `1px solid ${open && query.trim() ? C.borderH : "rgba(255,255,255,0.07)"}`,
+          height: 38, transition: "border-color 0.15s",
+        }}
+        onClick={() => inputRef.current?.focus()}
+      >
+        <Search size={14} color={C.t3} style={{ flexShrink: 0 }} />
         <input
           ref={inputRef}
           value={query}
           onChange={handleChange}
           onKeyDown={handleKey}
-          onFocus={() => { if (query) setOpen(true); }}
-          placeholder="Search employees, tasks, projects, pages… (⌘K)"
+          onFocus={() => { if (query.trim()) setOpen(true); }}
+          placeholder="Search employees, tasks, projects…"
           style={{ background: "transparent", border: "none", outline: "none", color: C.t1, fontSize: 13, flex: 1, minWidth: 0 }}
         />
         {query
-          ? <button onClick={clear} style={{ background: "none", border: "none", cursor: "pointer", color: C.t3, display: "flex", alignItems: "center" }}><X size={13} /></button>
-          : <span style={{ marginLeft: "auto", fontSize: 10, color: C.t3, background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border}`, borderRadius: 5, padding: "2px 6px", flexShrink: 0, whiteSpace: "nowrap" }}>⌘K</span>
+          ? <button onClick={clear} style={{ background: "none", border: "none", cursor: "pointer", color: C.t3, display: "flex", alignItems: "center", flexShrink: 0 }}><X size={14} /></button>
+          : <span style={{ fontSize: 10, color: C.t3, background: "rgba(255,255,255,0.05)", border: `1px solid ${C.border}`, borderRadius: 5, padding: "2px 6px", flexShrink: 0, whiteSpace: "nowrap" }}>⌘K</span>
         }
       </div>
 
+      {/* Inline dropdown — anchored directly under the search box (YouTube-style) */}
       {open && query.trim() && (
-        <div className="fadeIn" style={{
-          position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0,
-          background: C.panel, border: `1px solid ${C.borderH}`,
-          borderRadius: 14, boxShadow: "0 24px 60px rgba(0,0,0,0.7)",
-          zIndex: 9999, overflow: "hidden", maxHeight: 420, overflowY: "auto",
-        }}>
-          {loading ? (
-            <div style={{ padding: "18px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${C.accent}`, borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
-              <span style={{ fontSize: 13, color: C.t2 }}>Searching across all data…</span>
-            </div>
-          ) : results.length === 0 ? (
-            <div style={{ padding: "24px 16px", textAlign: "center" }}>
-              <p style={{ fontSize: 13, color: C.t2 }}>No results for <strong style={{ color: C.t1 }}>"{query}"</strong></p>
-              <p style={{ fontSize: 12, color: C.t3, marginTop: 6 }}>Try searching for a name, page, or keyword</p>
-            </div>
-          ) : (
-            Object.entries(grouped).map(([cat, items]) => (
-              <div key={cat}>
-                <div style={{ padding: "8px 14px 4px", fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: ".1em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
-                  {cat}
-                </div>
-                {items.map(item => {
-                  const idx = flatIdx++;
-                  const isActive = cursor === idx;
-                  return (
-                    <div
-                      key={item.id || item.label}
-                      onMouseEnter={() => setCursor(idx)}
-                      onClick={() => navigate(item)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 12,
-                        padding: "10px 14px", cursor: "pointer",
-                        background: isActive ? `rgba(99,102,241,0.12)` : "transparent",
-                        borderLeft: isActive ? `3px solid ${C.accent}` : "3px solid transparent",
-                        transition: "all .12s",
-                      }}
-                    >
-                      <div style={{
-                        width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-                        background: item.color + "18", border: `1px solid ${item.color}28`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 14,
-                      }}>
-                        {item.icon}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: isActive ? C.t1 : C.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</p>
-                        <p style={{ fontSize: 11, color: C.t3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.sub}</p>
-                      </div>
-                      <div style={{ fontSize: 10, color: C.t3, background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 5, padding: "2px 7px", flexShrink: 0, fontWeight: 600 }}>
-                        {item.page}
-                      </div>
-                      {isActive && <ChevronRight size={13} color={C.accent} style={{ flexShrink: 0 }} />}
-                    </div>
-                  );
-                })}
+        <div
+          className="fadeIn"
+          style={{
+            position: "absolute", top: "calc(100% + 6px)", left: 0,
+            width: "min(520px, 92vw)",
+            background: C.panel, border: `1px solid ${C.borderH}`,
+            borderRadius: 12, boxShadow: "0 24px 60px rgba(0,0,0,0.8)",
+            zIndex: 10000, overflow: "hidden",
+            display: "flex", flexDirection: "column", maxHeight: 460,
+          }}
+        >
+          <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+            {loading ? (
+              <div style={{ padding: "18px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 16, height: 16, borderRadius: "50%", border: `2px solid ${C.accent}`, borderTopColor: "transparent", animation: "spin 0.7s linear infinite" }} />
+                <span style={{ fontSize: 13, color: C.t2 }}>Searching…</span>
               </div>
-            ))
-          )}
-          <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 16, alignItems: "center" }}>
+            ) : results.length === 0 ? (
+              <div style={{ padding: "28px 16px", textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: C.t2 }}>No results for <strong style={{ color: C.t1 }}>"{query}"</strong></p>
+                <p style={{ fontSize: 12, color: C.t3, marginTop: 6 }}>Try a name, page, or keyword</p>
+              </div>
+            ) : (
+              Object.entries(grouped).map(([cat, items]) => (
+                <div key={cat}>
+                  <div style={{ padding: "9px 16px 5px", fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: ".1em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}`, background: "rgba(255,255,255,0.02)" }}>
+                    {cat}
+                  </div>
+                  {items.map(item => {
+                    const idx = flatIdx++;
+                    const isActive = cursor === idx;
+                    return (
+                      <div
+                        key={item.id || item.label}
+                        onMouseEnter={() => setCursor(idx)}
+                        onClick={() => navigate(item)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 12,
+                          padding: "10px 16px", cursor: "pointer",
+                          background: isActive ? `rgba(99,102,241,0.12)` : "transparent",
+                          borderLeft: isActive ? `3px solid ${C.accent}` : "3px solid transparent",
+                          transition: "all .12s",
+                        }}
+                      >
+                        <div style={{
+                          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                          background: item.color + "18", border: `1px solid ${item.color}28`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 13,
+                        }}>
+                          {item.icon}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: C.t1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</p>
+                          <p style={{ fontSize: 11, color: C.t3, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.sub}</p>
+                        </div>
+                        <div style={{ fontSize: 10, color: C.t3, background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 5, padding: "2px 7px", flexShrink: 0, fontWeight: 600 }}>
+                          {item.page}
+                        </div>
+                        {isActive && <ChevronRight size={13} color={C.accent} style={{ flexShrink: 0 }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))
+            )}
+          </div>
+          <div style={{ padding: "8px 16px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 14, alignItems: "center", background: "rgba(255,255,255,0.02)" }}>
             <span style={{ fontSize: 11, color: C.t3 }}>↑↓ navigate</span>
             <span style={{ fontSize: 11, color: C.t3 }}>↵ select</span>
             <span style={{ fontSize: 11, color: C.t3 }}>Esc close</span>
