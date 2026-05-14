@@ -21,6 +21,7 @@ import {
 } from "recharts";
 import ChatPage from "./ChatPage";
 import ToolsPage from "./ToolsPage";
+// frontend patch: attendance numeric settings allow direct keyboard typing (v2)
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 const API = "https://nexus-backend-production-771f.up.railway.app/api";
@@ -557,7 +558,7 @@ function FormField({ label, children }) {
   );
 }
 
-function Inp({ value, onChange, placeholder, type = "text", icon: Icon, style: ext, disabled, showToggle = false, autoComplete, name, onKeyDown, maxLength }) {
+function Inp({ value, onChange, placeholder, type = "text", icon: Icon, style: ext, disabled, showToggle = false, autoComplete, name, onKeyDown, maxLength, inputMode, pattern }) {
   const [show, setShow] = useState(false);
   const isPassword = type === "password";
   const effectiveType = isPassword && showToggle && show ? "text" : type;
@@ -565,7 +566,7 @@ function Inp({ value, onChange, placeholder, type = "text", icon: Icon, style: e
     <div style={{ position: "relative", ...ext }}>
       {Icon && <Icon size={14} color={C.t3} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />}
       <input className="inp" type={effectiveType} value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
-        autoComplete={autoComplete} name={name} onKeyDown={onKeyDown} maxLength={maxLength}
+        autoComplete={autoComplete} name={name} onKeyDown={onKeyDown} maxLength={maxLength} inputMode={inputMode} pattern={pattern}
         style={{ paddingLeft: Icon ? 34 : 12, paddingRight: showToggle && isPassword ? 38 : 12, opacity: disabled ? 0.6 : 1 }} />
       {showToggle && isPassword && (
         <button type="button" tabIndex={-1} onClick={() => setShow(s => !s)} aria-label={show ? "Hide password" : "Show password"}
@@ -4780,28 +4781,28 @@ function CompanyPage({ addToast, user }) {
               </div>
             </div>
             <F label="Grace Period (minutes)">
-              <Inp value={form.gracePeriodMinutes} onChange={e => setForm(p => ({ ...p, gracePeriodMinutes: e.target.value }))} placeholder="15" type="number" />
+              <Inp value={form.gracePeriodMinutes} onChange={e => setForm(p => ({ ...p, gracePeriodMinutes: e.target.value.replace(/[^0-9.]/g, "") }))} inputMode="decimal" pattern="[0-9]*" placeholder="15" type="text" />
             </F>
             <F label="Early Login Window (minutes before start)">
-              <Inp value={form.earlyWindowMinutes} onChange={e => setForm(p => ({ ...p, earlyWindowMinutes: e.target.value }))} placeholder="30" type="number" />
+              <Inp value={form.earlyWindowMinutes} onChange={e => setForm(p => ({ ...p, earlyWindowMinutes: e.target.value.replace(/[^0-9.]/g, "") }))} inputMode="decimal" pattern="[0-9]*" placeholder="30" type="text" />
             </F>
             <F label="Half Day Cutoff After Grace (minutes)">
-              <Inp value={form.halfDayCutoffMinutes} onChange={e => setForm(p => ({ ...p, halfDayCutoffMinutes: e.target.value }))} placeholder="105" type="number" />
+              <Inp value={form.halfDayCutoffMinutes} onChange={e => setForm(p => ({ ...p, halfDayCutoffMinutes: e.target.value.replace(/[^0-9.]/g, "") }))} inputMode="decimal" pattern="[0-9]*" placeholder="105" type="text" />
             </F>
             <F label="Hard Absent Cutoff After Grace (minutes)">
-              <Inp value={form.absentCutoffMinutes} onChange={e => setForm(p => ({ ...p, absentCutoffMinutes: e.target.value }))} placeholder="165" type="number" />
+              <Inp value={form.absentCutoffMinutes} onChange={e => setForm(p => ({ ...p, absentCutoffMinutes: e.target.value.replace(/[^0-9.]/g, "") }))} inputMode="decimal" pattern="[0-9]*" placeholder="165" type="text" />
             </F>
             <F label="Minimum Work Hours (for Present)">
-              <Inp value={form.minWorkingHours} onChange={e => setForm(p => ({ ...p, minWorkingHours: e.target.value }))} placeholder="7" type="number" />
+              <Inp value={form.minWorkingHours} onChange={e => setForm(p => ({ ...p, minWorkingHours: e.target.value.replace(/[^0-9.]/g, "") }))} inputMode="decimal" pattern="[0-9]*" placeholder="7" type="text" />
             </F>
             <F label="Half Day Threshold (hours)">
-              <Inp value={form.halfDayHours} onChange={e => setForm(p => ({ ...p, halfDayHours: e.target.value }))} placeholder="4" type="number" />
+              <Inp value={form.halfDayHours} onChange={e => setForm(p => ({ ...p, halfDayHours: e.target.value.replace(/[^0-9.]/g, "") }))} inputMode="decimal" pattern="[0-9]*" placeholder="4" type="text" />
             </F>
             <F label="Session Timeout (hours)">
-              <Inp value={form.sessionTimeoutHours} onChange={e => setForm(p => ({ ...p, sessionTimeoutHours: e.target.value }))} placeholder="8" type="number" />
+              <Inp value={form.sessionTimeoutHours} onChange={e => setForm(p => ({ ...p, sessionTimeoutHours: e.target.value.replace(/[^0-9.]/g, "") }))} inputMode="decimal" pattern="[0-9]*" placeholder="8" type="text" />
             </F>
             <F label="Auto End Buffer After Shift End (minutes)">
-              <Inp value={form.autoEndBufferMinutes} onChange={e => setForm(p => ({ ...p, autoEndBufferMinutes: e.target.value }))} placeholder="0" type="number" />
+              <Inp value={form.autoEndBufferMinutes} onChange={e => setForm(p => ({ ...p, autoEndBufferMinutes: e.target.value.replace(/[^0-9.]/g, "") }))} inputMode="decimal" pattern="[0-9]*" placeholder="0" type="text" />
             </F>
           </div>
 
@@ -6029,7 +6030,7 @@ function BankingPage({ addToast, user }) {
             <FormField label="IFSC Code"><Inp value={acctForm.ifsc} onChange={e => setAcctForm(p => ({ ...p, ifsc: e.target.value.toUpperCase() }))} placeholder="HDFC0001234" /></FormField>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormField label="Opening Balance (₹)"><Inp value={acctForm.openingBalance} onChange={e => setAcctForm(p => ({ ...p, openingBalance: e.target.value }))} placeholder="0" type="number" /></FormField>
+            <FormField label="Opening Balance (₹)"><Inp value={acctForm.openingBalance} onChange={e => setAcctForm(p => ({ ...p, openingBalance: e.target.value }))} placeholder="0" type="text" /></FormField>
             <FormField label="Opening Date"><Inp value={acctForm.openingDate} onChange={e => setAcctForm(p => ({ ...p, openingDate: e.target.value }))} type="date" /></FormField>
           </div>
           <FormField label="Notes"><textarea className="inp" value={acctForm.notes} onChange={e => setAcctForm(p => ({ ...p, notes: e.target.value }))} placeholder="Optional notes..." rows={2} style={{ resize: "vertical" }} /></FormField>
