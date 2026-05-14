@@ -63,6 +63,14 @@ const safeArr = (d, ...keys) => {
   return [];
 };
 const isAdmin = (u) => u?.role === "admin" || u?.role === "super_admin";
+const validHoursValue = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 && n <= 24 ? n : null;
+};
+const fmtHours = (value, digits = 1) => {
+  const n = validHoursValue(value);
+  return n === null ? "—" : `${n.toFixed(digits)}h`;
+};
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const C = {
@@ -1299,7 +1307,7 @@ function DashboardPage({ addToast, user, setPage }) {
       const r = await apiFetch("/attendance/checkout", { method: "POST" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.message || "Failed");
-      addToast("Session ended. " + (d.attendance?.totalHours ? `Total: ${d.attendance.totalHours}h · ${d.attendance.status}` : ""), "success", {
+      addToast("Session ended. " + (fmtHours(d.attendance?.totalHours) !== "—" ? `Total: ${fmtHours(d.attendance.totalHours)} · ${d.attendance.status}` : ""), "success", {
         label: "UNDO",
         onClick: async () => {
           try {
@@ -1494,7 +1502,7 @@ function DashboardPage({ addToast, user, setPage }) {
                 <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
                   <p style={{ fontSize: 11, color: C.t2, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Elapsed Time</p>
                   <p style={{ fontSize: 16, fontWeight: 800, color: sessionActive ? C.accent : C.t3, fontVariantNumeric: "tabular-nums" }}>
-                    {sessionActive ? fmtElapsed(elapsedSecs) : todayRec?.totalHours ? `${Number(todayRec.totalHours).toFixed(1)}h total` : "—"}
+                    {sessionActive ? fmtElapsed(elapsedSecs) : fmtHours(todayRec?.totalHours) !== "—" ? `${fmtHours(todayRec.totalHours)} total` : "—"}
                   </p>
                   <p style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>{sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start"}</p>
                 </div>
@@ -1529,7 +1537,7 @@ function DashboardPage({ addToast, user, setPage }) {
                 )
               ) : (
                 <div style={{ padding: "12px 16px", background: C.blue + "14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
-                  <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed for today · {todayRec?.totalHours ? `${Number(todayRec.totalHours).toFixed(1)}h worked` : ""}</p>
+                  <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed for today · {fmtHours(todayRec?.totalHours) !== "—" ? `${fmtHours(todayRec.totalHours)} worked` : ""}</p>
                 </div>
               )}
             </div>
@@ -2879,7 +2887,7 @@ function AttendancePage({ addToast, user }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: hint ? 14 : 20 }}>
               {[
                 { label: "Session Started", value: todayRec?.checkIn ? formatTime(todayRec.checkIn) : "—", sub: todayRec?.checkIn ? new Date(todayRec.checkIn).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "Not started yet", color: todayRec?.checkIn ? C.green : C.t3 },
-                { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : todayRec?.totalHours ? Number(todayRec.totalHours).toFixed(1)+"h total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
+                { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : fmtHours(todayRec?.totalHours) !== "—" ? fmtHours(todayRec.totalHours)+" total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
                 { label: "Session End",     value: todayRec?.checkOut ? formatTime(todayRec.checkOut) : "—", sub: todayRec?.checkOut ? "Checked out" : "Still running", color: todayRec?.checkOut ? C.red : C.t3 },
               ].map(x => (
                 <div key={x.label} style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
@@ -2896,7 +2904,7 @@ function AttendancePage({ addToast, user }) {
             )}
             {sessionDone ? (
               <div style={{ padding: "12px 16px", background: C.blue+"14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
-                <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {todayRec?.totalHours ? Number(todayRec.totalHours).toFixed(1)+"h worked" : ""} · {statusBadge(todayRec?.status)}</p>
+                <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {fmtHours(todayRec?.totalHours) !== "—" ? fmtHours(todayRec.totalHours)+" worked" : ""} · {statusBadge(todayRec?.status)}</p>
                 <p style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>You're done for today. Re-check-in is disabled.</p>
               </div>
             ) : sessionActive ? (
@@ -2972,7 +2980,7 @@ function AttendancePage({ addToast, user }) {
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{formatDate(row.date)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.green, fontWeight: 500 }}>{formatTime(row.checkIn || row.loginTime)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.red, fontWeight: 500 }}>{formatTime(row.checkOut || row.logoutTime)}</td>
-                <td style={{ padding: "12px 16px", fontSize: 13 }}>{(row.totalHours || row.hoursWorked) ? <span style={{ color: C.cyan, fontWeight: 600 }}>{Number(row.totalHours || row.hoursWorked).toFixed(1)}h</span> : "—"}</td>
+                <td style={{ padding: "12px 16px", fontSize: 13 }}>{fmtHours(row.totalHours || row.hoursWorked) !== "—" ? <span style={{ color: C.cyan, fontWeight: 600 }}>{fmtHours(row.totalHours || row.hoursWorked)}</span> : "—"}</td>
                 <td style={{ padding: "12px 16px" }}>{statusBadge(row.status)}</td>
                 {isAdmin(user) && <td style={{ padding: "12px 16px" }}><button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => { setOverrideForm({ userId: row.user?._id || row.userId?._id || row.userId || "", date: row.date?.split("T")[0] || new Date().toISOString().split("T")[0], status: row.status || "present", note: "" }); setOverrideModal(true); }}><Edit2 size={12} /></button></td>}
               </tr>
@@ -4663,8 +4671,10 @@ function CompanyPage({ addToast, user }) {
     gracePeriod: "", sessionTimeoutHours: "",
     officeStartHour: "9", officeStartMinute: "0",
     officeEndHour: "18", officeEndMinute: "0",
-    gracePeriodMinutes: "15", minWorkingHours: "7",
-    halfDayHours: "4", autoEndHour: "23", autoEndMinute: "59",
+    gracePeriodMinutes: "15", earlyWindowMinutes: "30",
+    halfDayCutoffMinutes: "105", absentCutoffMinutes: "165",
+    minWorkingHours: "7", halfDayHours: "4",
+    autoEndBufferMinutes: "0", autoEndHour: "23", autoEndMinute: "59",
   });
 
   useEffect(() => {
@@ -4685,8 +4695,12 @@ function CompanyPage({ addToast, user }) {
           officeEndHour:      String(s?.officeEndHour ?? 18),
           officeEndMinute:    String(s?.officeEndMinute ?? 0),
           gracePeriodMinutes: String(s?.gracePeriodMinutes ?? 15),
+          earlyWindowMinutes: String(s?.earlyWindowMinutes ?? 30),
+          halfDayCutoffMinutes: String(s?.halfDayCutoffMinutes ?? 105),
+          absentCutoffMinutes: String(s?.absentCutoffMinutes ?? 165),
           minWorkingHours:    String(s?.minWorkingHours ?? 7),
           halfDayHours:       String(s?.halfDayHours ?? 4),
+          autoEndBufferMinutes: String(s?.autoEndBufferMinutes ?? 0),
           autoEndHour:        String(s?.autoEndHour ?? 23),
           autoEndMinute:      String(s?.autoEndMinute ?? 59),
         });
@@ -4706,8 +4720,12 @@ function CompanyPage({ addToast, user }) {
         officeEndHour:      Number(form.officeEndHour),
         officeEndMinute:    Number(form.officeEndMinute),
         gracePeriodMinutes: Number(form.gracePeriodMinutes),
+        earlyWindowMinutes: Number(form.earlyWindowMinutes),
+        halfDayCutoffMinutes: Number(form.halfDayCutoffMinutes),
+        absentCutoffMinutes: Number(form.absentCutoffMinutes),
         minWorkingHours:    Number(form.minWorkingHours),
         halfDayHours:       Number(form.halfDayHours),
+        autoEndBufferMinutes: Number(form.autoEndBufferMinutes),
         autoEndHour:        Number(form.autoEndHour),
         autoEndMinute:      Number(form.autoEndMinute),
       };
@@ -4764,6 +4782,15 @@ function CompanyPage({ addToast, user }) {
             <F label="Grace Period (minutes)">
               <Inp value={form.gracePeriodMinutes} onChange={e => setForm(p => ({ ...p, gracePeriodMinutes: e.target.value }))} placeholder="15" type="number" />
             </F>
+            <F label="Early Login Window (minutes before start)">
+              <Inp value={form.earlyWindowMinutes} onChange={e => setForm(p => ({ ...p, earlyWindowMinutes: e.target.value }))} placeholder="30" type="number" />
+            </F>
+            <F label="Half Day Cutoff After Grace (minutes)">
+              <Inp value={form.halfDayCutoffMinutes} onChange={e => setForm(p => ({ ...p, halfDayCutoffMinutes: e.target.value }))} placeholder="105" type="number" />
+            </F>
+            <F label="Hard Absent Cutoff After Grace (minutes)">
+              <Inp value={form.absentCutoffMinutes} onChange={e => setForm(p => ({ ...p, absentCutoffMinutes: e.target.value }))} placeholder="165" type="number" />
+            </F>
             <F label="Minimum Work Hours (for Present)">
               <Inp value={form.minWorkingHours} onChange={e => setForm(p => ({ ...p, minWorkingHours: e.target.value }))} placeholder="7" type="number" />
             </F>
@@ -4773,12 +4800,15 @@ function CompanyPage({ addToast, user }) {
             <F label="Session Timeout (hours)">
               <Inp value={form.sessionTimeoutHours} onChange={e => setForm(p => ({ ...p, sessionTimeoutHours: e.target.value }))} placeholder="8" type="number" />
             </F>
+            <F label="Auto End Buffer After Shift End (minutes)">
+              <Inp value={form.autoEndBufferMinutes} onChange={e => setForm(p => ({ ...p, autoEndBufferMinutes: e.target.value }))} placeholder="0" type="number" />
+            </F>
           </div>
 
           {/* Auto End Session */}
           <div style={{ marginTop: 16, padding: "14px 16px", background: C.amberG, border: `1px solid ${C.amber}28`, borderRadius: 10 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginBottom: 10 }}>⏰ Auto End Session Time</p>
-            <p style={{ fontSize: 12, color: C.t2, marginBottom: 10 }}>If an employee forgets to check out, their session will be force-ended at this time.</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginBottom: 10 }}>Auto End Session Time</p>
+            <p style={{ fontSize: 12, color: C.t2, marginBottom: 10 }}>If an employee forgets to check out, their session will be force-ended using the shift end time and buffer, or this legacy fallback time.</p>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <select value={form.autoEndHour} onChange={e => setForm(p => ({ ...p, autoEndHour: e.target.value }))} className="inp" style={{ width: 90 }}>
                 {Array.from({length:24},(_,i)=><option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
@@ -4787,7 +4817,7 @@ function CompanyPage({ addToast, user }) {
               <select value={form.autoEndMinute} onChange={e => setForm(p => ({ ...p, autoEndMinute: e.target.value }))} className="inp" style={{ width: 90 }}>
                 {[0,15,30,45].map(m=><option key={m} value={m}>{String(m).padStart(2,'0')}</option>)}
               </select>
-              <span style={{ fontSize: 12, color: C.t2 }}>— sessions auto-close at this time</span>
+              <span style={{ fontSize: 12, color: C.t2 }}>— legacy fallback close time</span>
             </div>
           </div>
 
@@ -4796,10 +4826,11 @@ function CompanyPage({ addToast, user }) {
             <p style={{ fontSize: 12, fontWeight: 700, color: C.accent, marginBottom: 8 }}>Auto Status Calculation Logic</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {[
-                { c: C.green,  l: "✅ PRESENT",  r: `Hours ≥ ${form.minWorkingHours}h AND checked in within grace period` },
-                { c: C.amber,  l: "🟡 LATE",     r: `Checked in after grace period but within session window` },
-                { c: C.blue,   l: "🟠 HALF DAY", r: `Hours ≥ ${form.halfDayHours}h but < ${form.minWorkingHours}h` },
-                { c: C.red,    l: "🔴 ABSENT",   r: `No check-in OR hours < ${form.halfDayHours}h` },
+                { c: C.cyan,   l: "EARLY",    r: `Login up to ${form.earlyWindowMinutes} min before shift start` },
+                { c: C.green,  l: "PRESENT",  r: `Login within ${form.gracePeriodMinutes} min grace and hours ≥ ${form.minWorkingHours}h` },
+                { c: C.amber,  l: "LATE",     r: `After grace but before half-day cutoff` },
+                { c: C.blue,   l: "HALF DAY", r: `After half-day cutoff or hours between ${form.halfDayHours}h and ${form.minWorkingHours}h` },
+                { c: C.red,    l: "ABSENT",   r: `No check-in, hours < ${form.halfDayHours}h, or after hard cutoff` },
               ].map(x => (
                 <div key={x.l} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: x.c, minWidth: 100 }}>{x.l}</span>
