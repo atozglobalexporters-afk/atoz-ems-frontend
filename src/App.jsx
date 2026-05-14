@@ -4832,13 +4832,52 @@ function AuditPage({ addToast }) {
     })();
   }, []);
 
+  // Turn ACTION_CODE into a readable phrase
+  const humanizeAuditAction = (code) => {
+    const map = {
+      LOGIN: "Logged in", LOGOUT: "Logged out", SYSTEM_SETUP: "System setup",
+      CREATE_EMPLOYEE: "Added an employee", UPDATE_USER: "Updated an employee",
+      DELETE_USER: "Removed an employee", CREATE_HOLIDAY: "Added a holiday",
+      DELETE_HOLIDAY: "Removed a holiday", UPDATE_WORKLOG: "Updated a work log",
+      CREATE_SALARY: "Added a salary record", UPDATE_COMPANY: "Updated company settings",
+      UPDATE_ORGANIZATION: "Updated organization profile", CREATE_BUYER: "Added a buyer",
+      GENERATE_PAYROLL: "Generated payroll", CREATE_PAYROLL: "Created a payroll record",
+      UPDATE_EXPENSE: "Updated an expense", UPDATE_PAYSLIP: "Updated a payslip",
+      ADMIN_OVERRIDE: "Applied an admin override", CREATE_ANNOUNCEMENT: "Posted an announcement",
+      DELETE_ANNOUNCEMENT: "Removed an announcement",
+    };
+    if (map[code]) return map[code];
+    return String(code || "—").toLowerCase().replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
+  };
+
+  // Turn the details object into a short readable summary
+  const humanizeDetails = (v, action) => {
+    if (!v) return "—";
+    if (typeof v === "string") return v;
+    if (typeof v !== "object") return String(v);
+    if (action === "GENERATE_PAYROLL") {
+      return `${v.created ?? 0} created${v.skipped ? `, ${v.skipped} skipped` : ""}`;
+    }
+    if (v.status) return `Status: ${v.status}`;
+    if (v.companyName || v.name) return v.companyName || v.name;
+    if (v.message) return v.message;
+    // Generic: list a couple of changed fields
+    const keys = Object.keys(v).filter(k => !["_id", "__v"].includes(k));
+    if (keys.length === 0) return "—";
+    return keys.slice(0, 3).map(k => {
+      const val = v[k];
+      const short = typeof val === "object" ? "…" : String(val).slice(0, 24);
+      return `${k}: ${short}`;
+    }).join(", ");
+  };
+
   return (
     <PageShell title="Audit Logs" sub="System activity history">
       <Table loading={loading} columns={[
-        { key: "userId",  label: "User",    render: v => <span style={{ fontWeight: 600 }}>{v?.name || "System"}</span> },
-        { key: "action",  label: "Action",  render: v => <span style={{ color: C.t2, fontSize: 12 }}>{v || "—"}</span> },
-        { key: "details", label: "Details", render: v => <span style={{ color: C.t3, fontSize: 12, maxWidth: 300, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{typeof v === "object" ? JSON.stringify(v) : v || "—"}</span> },
-        { key: "createdAt", label: "Time",  render: v => <span style={{ color: C.t2, fontSize: 12 }}>{v ? new Date(v).toLocaleString("en-IN") : "—"}</span> },
+        { key: "user",   label: "User",   render: v => <span style={{ fontWeight: 600 }}>{v?.name || "System"}</span> },
+        { key: "action", label: "Action", render: v => <span style={{ color: C.t2, fontSize: 12 }}>{humanizeAuditAction(v)}</span> },
+        { key: "details", label: "Details", render: (v, row) => <span style={{ color: C.t3, fontSize: 12, maxWidth: 320, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{humanizeDetails(v, row?.action)}</span> },
+        { key: "createdAt", label: "Time", render: v => <span style={{ color: C.t2, fontSize: 12 }}>{v ? new Date(v).toLocaleString("en-IN") : "—"}</span> },
       ]} rows={logs} emptyText="No audit logs" />
     </PageShell>
   );
@@ -5104,9 +5143,28 @@ function DepartmentsPage({ addToast, user }) {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm("Delete this department?")) return;
-    try { await apiFetch(`/departments/${id}`, { method: "DELETE" }); addToast("Deleted", "success"); load(); }
-    catch { addToast("Failed to delete", "error"); }
+    const target = depts.find(d => d._id === id);
+    if (!target) return;
+    setDepts(prev => prev.filter(d => d._id !== id));
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      try {
+        const r = await apiFetch(`/departments/${id}`, { method: "DELETE" });
+        if (!r.ok) throw new Error();
+      } catch {
+        addToast("Could not delete on server — restored", "error");
+        setDepts(prev => prev.find(d => d._id === id) ? prev : [target, ...prev]);
+      }
+    }, 10000);
+    addToast("Department deleted", "info", {
+      label: "UNDO",
+      onClick: () => {
+        cancelled = true; clearTimeout(timer);
+        setDepts(prev => prev.find(d => d._id === id) ? prev : [target, ...prev]);
+        addToast("Restored", "success");
+      },
+    });
   };
 
   const filtered = depts.filter(d => {
