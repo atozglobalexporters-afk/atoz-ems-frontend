@@ -46,7 +46,7 @@ const Btn = ({children,onClick,variant='primary',size='md',disabled=false,style=
   return (
     <button onClick={onClick} disabled={disabled}
       onMouseEnter={()=>setH(true)} onMouseLeave={()=>setH(false)}
-      style={{...v,...s,border:v.border||'none',borderRadius:8,fontWeight:600,cursor:disabled?'not-allowed':'pointer',transition:'all .15s',display:'inline-flex',alignItems:'center',gap:5,opacity:disabled?.6:1,...style}}>
+      style={{...v,...s,border:v.border||'none',borderRadius:16,fontWeight:600,cursor:disabled?'not-allowed':'pointer',transition:'all .15s',display:'inline-flex',alignItems:'center',gap:5,opacity:disabled?.6:1,...style}}>
       {children}
     </button>
   );
@@ -145,7 +145,7 @@ const Calculator = () => {
                 else if (b==='e') setDisplay('2.71828182');
                 else if (b==='%') press('%');
                 else sciPress(b);
-              }} style={{padding:'9px',borderRadius:8,border:'none',cursor:'pointer',background:'rgba(99,102,241,.15)',color:C.acc,fontSize:12,fontWeight:700}}>
+              }} style={{padding:'9px',borderRadius:16,border:'none',cursor:'pointer',background:'rgba(99,102,241,.15)',color:C.acc,fontSize:12,fontWeight:700}}>
                 {b}
               </button>
             ))}
@@ -163,7 +163,7 @@ const Calculator = () => {
       </Card>
       {mode==='scientific' && (
         <Card style={{padding:16}}>
-          <h4 style={{color:C.tx,fontSize:13,fontWeight:700,marginBottom:10}}>History</h4>
+          <h4 style={{color:C.tx,fontSize:16,fontWeight:700,marginBottom:10}}>History</h4>
           {history.length === 0
             ? <p style={{color:C.txs,fontSize:12}}>No calculations yet</p>
             : history.map((h,i) => <div key={i} style={{padding:'7px 0',borderBottom:`1px solid ${C.bdr}`,color:C.txm,fontSize:12,fontFamily:'monospace'}}>{h}</div>)
@@ -196,30 +196,30 @@ const CurrencyConverter = () => {
   const result = rate ? (parseFloat(amount||0) * rate).toFixed(2) : '—';
 
   return (
-    <Card style={{maxWidth:480}}>
+    <Card style={{maxWidth:1100,width:'100%',background:'linear-gradient(135deg,rgba(15,23,42,.96),rgba(2,6,23,.96))',border:'1px solid rgba(99,102,241,.35)',borderRadius:24,padding:24,boxShadow:'0 20px 60px rgba(0,0,0,.45)'}}>
       <h3 style={{color:C.tx,fontSize:14,fontWeight:700,marginBottom:14}}>💱 Currency Converter</h3>
-      <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:10,alignItems:'end'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 90px 1fr',gap:10,alignItems:'end'}}>
         <div>
           <label style={{color:C.txm,fontSize:11,fontWeight:600,marginBottom:6,display:'block'}}>From</label>
-          <select value={from} onChange={e=>setFrom(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 11px',color:C.tx,fontSize:13,outline:'none'}}>
+          <select value={from} onChange={e=>setFrom(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:16,padding:'18px 18px',color:C.tx,fontSize:16,outline:'none'}}>
             {currencies.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        <button onClick={()=>{ const t=from; setFrom(to); setTo(t); }} style={{background:C.accS,border:`1px solid ${C.bdr}`,borderRadius:8,padding:9,cursor:'pointer',color:C.acc}}>
-          <ArrowLeftRight size={14} />
+        <button onClick={()=>{ const t=from; setFrom(to); setTo(t); }} style={{background:C.accS,border:`1px solid ${C.bdr}`,borderRadius:16,padding:20,cursor:'pointer',color:C.acc}}>
+          <ArrowLeftRight size={28} />
         </button>
         <div>
           <label style={{color:C.txm,fontSize:11,fontWeight:600,marginBottom:6,display:'block'}}>To</label>
-          <select value={to} onChange={e=>setTo(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 11px',color:C.tx,fontSize:13,outline:'none'}}>
+          <select value={to} onChange={e=>setTo(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:16,padding:'18px 18px',color:C.tx,fontSize:16,outline:'none'}}>
             {currencies.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
       <input value={amount} onChange={e=>setAmount(e.target.value)} type="number" placeholder="Amount"
-        style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'10px 13px',color:C.tx,fontSize:14,outline:'none',marginTop:14}} />
-      <div style={{marginTop:14,padding:'14px 16px',background:`linear-gradient(135deg, ${C.accS}, transparent)`,borderRadius:10,border:`1px solid ${C.acc}33`}}>
+        style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:16,padding:'10px 13px',color:C.tx,fontSize:14,outline:'none',marginTop:14}} />
+      <div style={{marginTop:24,padding:'28px',background:`linear-gradient(135deg, ${C.accS}, transparent)`,borderRadius:10,border:`1px solid ${C.acc}33`}}>
         <p style={{color:C.txm,fontSize:11,marginBottom:4}}>{amount} {from} =</p>
-        <p style={{color:C.tx,fontSize:24,fontWeight:800}}>{loading ? '...' : `${result} ${to}`}</p>
+        <p style={{color:C.tx,fontSize:46,fontWeight:800}}>{loading ? '...' : `${result} ${to}`}</p>
         {rate && <p style={{color:C.txs,fontSize:10,marginTop:5}}>1 {from} = {rate.toFixed(4)} {to}</p>}
       </div>
     </Card>
@@ -246,7 +246,7 @@ const UnitConverter = () => {
     : '—';
 
   return (
-    <Card style={{maxWidth:480}}>
+    <Card style={{maxWidth:1100,width:'100%',background:'linear-gradient(135deg,rgba(15,23,42,.96),rgba(2,6,23,.96))',border:'1px solid rgba(99,102,241,.35)',borderRadius:24,padding:24,boxShadow:'0 20px 60px rgba(0,0,0,.45)'}}>
       <h3 style={{color:C.tx,fontSize:14,fontWeight:700,marginBottom:14}}>📐 Unit Converter</h3>
       <div style={{display:'flex',gap:6,marginBottom:14}}>
         {Object.keys(units).map(t => (
@@ -256,26 +256,26 @@ const UnitConverter = () => {
           </button>
         ))}
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:10,alignItems:'end'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 90px 1fr',gap:10,alignItems:'end'}}>
         <div>
           <label style={{color:C.txm,fontSize:11,fontWeight:600,marginBottom:6,display:'block'}}>From</label>
-          <select value={from} onChange={e=>setFrom(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 11px',color:C.tx,fontSize:13,outline:'none'}}>
+          <select value={from} onChange={e=>setFrom(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:16,padding:'18px 18px',color:C.tx,fontSize:16,outline:'none'}}>
             {list.map(u => <option key={u} value={u}>{u}</option>)}
           </select>
         </div>
-        <button onClick={()=>{ const t=from; setFrom(to); setTo(t); }} style={{background:C.accS,border:`1px solid ${C.bdr}`,borderRadius:8,padding:9,cursor:'pointer',color:C.acc}}>
-          <ArrowLeftRight size={14} />
+        <button onClick={()=>{ const t=from; setFrom(to); setTo(t); }} style={{background:C.accS,border:`1px solid ${C.bdr}`,borderRadius:16,padding:20,cursor:'pointer',color:C.acc}}>
+          <ArrowLeftRight size={28} />
         </button>
         <div>
           <label style={{color:C.txm,fontSize:11,fontWeight:600,marginBottom:6,display:'block'}}>To</label>
-          <select value={to} onChange={e=>setTo(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'9px 11px',color:C.tx,fontSize:13,outline:'none'}}>
+          <select value={to} onChange={e=>setTo(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:16,padding:'18px 18px',color:C.tx,fontSize:16,outline:'none'}}>
             {list.map(u => <option key={u} value={u}>{u}</option>)}
           </select>
         </div>
       </div>
       <input value={value} onChange={e=>setValue(e.target.value)} type="number"
-        style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:8,padding:'10px 13px',color:C.tx,fontSize:14,outline:'none',marginTop:14}} />
-      <div style={{marginTop:14,padding:'14px 16px',background:`linear-gradient(135deg, ${C.accS}, transparent)`,borderRadius:10,border:`1px solid ${C.acc}33`}}>
+        style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:16,padding:'10px 13px',color:C.tx,fontSize:14,outline:'none',marginTop:14}} />
+      <div style={{marginTop:24,padding:'28px',background:`linear-gradient(135deg, ${C.accS}, transparent)`,borderRadius:10,border:`1px solid ${C.acc}33`}}>
         <p style={{color:C.tx,fontSize:18,fontWeight:800}}>{value} {from} = {result} {to}</p>
       </div>
     </Card>
@@ -397,7 +397,7 @@ const Notes = () => {
       {/* List */}
       <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:12,display:'flex',flexDirection:'column',overflow:'hidden'}}>
         <div style={{padding:'12px 14px',borderBottom:`1px solid ${C.bdr}`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <span style={{color:C.tx,fontSize:13,fontWeight:700}}>📝 My Notes ({notes.length})</span>
+          <span style={{color:C.tx,fontSize:16,fontWeight:700}}>📝 My Notes ({notes.length})</span>
           <button onClick={createNote} style={{background:'rgba(99,102,241,0.15)',border:`1px solid rgba(99,102,241,0.4)`,borderRadius:6,padding:'4px 8px',cursor:'pointer',color:'#a5a8ff',display:'flex',alignItems:'center',gap:4,fontSize:11,fontWeight:600}}>
             <Plus size={11} /> New
           </button>
@@ -412,7 +412,7 @@ const Notes = () => {
           {notes.map(n => (
             <div key={n._id} onClick={()=>setActiveId(n._id)}
               style={{padding:'12px 14px',borderBottom:`1px solid ${C.bdr}`,cursor:'pointer',background:activeId===n._id?'rgba(99,102,241,0.08)':'transparent',borderLeft:`3px solid ${activeId===n._id?C.acc:'transparent'}`}}>
-              <div style={{color:C.tx,fontSize:13,fontWeight:600,marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              <div style={{color:C.tx,fontSize:16,fontWeight:600,marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                 {n.title || 'Untitled'}
               </div>
               <div style={{color:C.txs,fontSize:10,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
@@ -426,7 +426,7 @@ const Notes = () => {
       {/* Editor */}
       <div style={{background:C.surf,border:`1px solid ${C.bdr}`,borderRadius:12,display:'flex',flexDirection:'column',overflow:'hidden'}}>
         {!active ? (
-          <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:C.txs,fontSize:13}}>
+          <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:C.txs,fontSize:16}}>
             Select or create a note to start writing.
           </div>
         ) : (
@@ -518,7 +518,7 @@ const WebTools = () => {
           <input value={searchQ} onChange={e=>setSearchQ(e.target.value)}
             onKeyDown={e=>{if(e.key==='Enter'&&searchQ.trim())window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQ)}`,'_blank');}}
             placeholder="Search Google…"
-            style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:9,padding:'10px 14px 10px 36px',color:C.tx,fontSize:13,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}} />
+            style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:9,padding:'10px 14px 10px 36px',color:C.tx,fontSize:16,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}} />
         </div>
         <Btn onClick={()=>window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQ)}`,'_blank')} disabled={!searchQ.trim()}>Search</Btn>
       </div>
@@ -530,7 +530,7 @@ const WebTools = () => {
             onMouseLeave={e=>{e.currentTarget.style.background=C.surf;e.currentTarget.style.borderColor=C.bdr;e.currentTarget.style.transform='translateY(0)';}}>
             {t.custom === 'whatsapp'
               ? <div style={{width:36,height:36,marginBottom:8,marginLeft:'auto',marginRight:'auto',display:'flex'}}><WhatsAppIcon size={36}/></div>
-              : <img src={getFavicon(t.domain)} alt={t.name} style={{width:36,height:36,marginBottom:8,borderRadius:8}} onError={e=>e.target.style.display='none'} />}
+              : <img src={getFavicon(t.domain)} alt={t.name} style={{width:36,height:36,marginBottom:8,borderRadius:16}} onError={e=>e.target.style.display='none'} />}
             <div style={{color:C.tx,fontSize:11,fontWeight:700,marginBottom:2}}>{t.name}</div>
             <div style={{color:C.txs,fontSize:10}}>{t.desc}</div>
           </div>
@@ -556,13 +556,13 @@ export default function ToolsPage() {
   return (
     <div style={{padding:24,height:'100%',overflow:'auto',background:C.bg}}>
       <h2 style={{color:C.tx,fontSize:19,fontWeight:800,marginBottom:6}}>Tools Hub</h2>
-      <p style={{color:C.txm,fontSize:13,marginBottom:18}}>Productivity utilities for your workspace</p>
+      <p style={{color:C.txm,fontSize:16,marginBottom:18}}>Productivity utilities for your workspace</p>
       <div style={{display:'flex',gap:6,marginBottom:20,flexWrap:'wrap'}}>
         {TOOLS.map(t => {
           const Icon = t.icon;
           return (
             <button key={t.id} onClick={()=>setActive(t.id)}
-              style={{padding:'8px 16px',borderRadius:8,border:'none',cursor:'pointer',background:active===t.id?C.acc:C.alt,color:active===t.id?'#fff':C.txm,fontWeight:600,fontSize:12,display:'flex',alignItems:'center',gap:6,transition:'all .15s'}}>
+              style={{padding:'8px 16px',borderRadius:16,border:'none',cursor:'pointer',background:active===t.id?C.acc:C.alt,color:active===t.id?'#fff':C.txm,fontWeight:600,fontSize:12,display:'flex',alignItems:'center',gap:6,transition:'all .15s'}}>
               <Icon size={13} /> {t.label}
             </button>
           );
