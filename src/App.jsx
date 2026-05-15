@@ -65,62 +65,106 @@ const safeArr = (d, ...keys) => {
 const isAdmin = (u) => u?.role === "admin" || u?.role === "super_admin";
 const validHoursValue = (value) => {
   const n = Number(value);
-  return Number.isFinite(n) && n > 0 && n <= 24 ? n : null;
+  return Number.isFinite(n) && n >= 0 ? n : null;
 };
+
 const fmtHours = (value, digits = 1) => {
+  const n = validHoursValue(value);
+  return n === null ? "—" : `${n.toFixed(digits)}h`;
+};
 
 // ─── SHIFT RESOLUTION ─────────────────────────────────────────
-const resolveActiveShift = (user, shifts = [], todayName = '') => {
+const resolveActiveShift = (user, shifts = [], todayName = "") => {
   if (!user || !Array.isArray(shifts)) return null;
 
-  const active = shifts.filter(s => {
+  const active = shifts.filter((s) => {
     if (!s) return false;
     if (s.isActive === false) return false;
 
-    const workingDays = Array.isArray(s.workingDays) ? s.workingDays : [];
-    if (workingDays.length && todayName && !workingDays.includes(todayName)) {
+    const workingDays = Array.isArray(s.workingDays)
+      ? s.workingDays
+      : [];
+
+    if (
+      workingDays.length &&
+      todayName &&
+      !workingDays.includes(todayName)
+    ) {
       return false;
     }
 
     return true;
   });
 
-  const employeeShift = active.find(s =>
-    s.scope === 'employee' &&
-    (
-      s.employee === user._id ||
-      (Array.isArray(s.assignedTo) && s.assignedTo.includes(user._id))
-    )
+  // Employee override
+  const employeeShift = active.find(
+    (s) =>
+      s.scope === "employee" &&
+      (
+        s.employee === user._id ||
+        (Array.isArray(s.assignedTo) &&
+          s.assignedTo.includes(user._id))
+      )
   );
 
   if (employeeShift) return employeeShift;
 
-  const teamShift = active.find(s =>
-    s.scope === 'team' &&
-    s.team &&
-    user.team &&
-    s.team === user.team
+  // Team
+  const teamShift = active.find(
+    (s) =>
+      s.scope === "team" &&
+      s.team &&
+      user.team &&
+      s.team === user.team
   );
 
   if (teamShift) return teamShift;
 
-  const departmentShift = active.find(s =>
-    s.scope === 'department' &&
-    s.department &&
-    user.department &&
-    s.department === user.department
+  // Department
+  const departmentShift = active.find(
+    (s) =>
+      s.scope === "department" &&
+      s.department &&
+      user.department &&
+      s.department === user.department
   );
 
   if (departmentShift) return departmentShift;
 
-  const companyShift = active.find(s =>
-    s.scope === 'company'
+  // Company fallback
+  const companyShift = active.find(
+    (s) => s.scope === "company"
   );
 
   return companyShift || null;
 };
 
-// Resolve shift label for Attendance Live
+const getResolvedShiftLabel = (user, shifts = []) => {
+  const todayName = new Date().toLocaleDateString(
+    "en-US",
+    { weekday: "long" }
+  );
+
+  const shift = resolveActiveShift(
+    user,
+    shifts,
+    todayName
+  );
+
+  if (!shift) return "No Shift Assigned";
+
+  const start =
+    shift.startTime ||
+    shift.start ||
+    "09:45 AM";
+
+  const end =
+    shift.endTime ||
+    shift.end ||
+    "02:00 PM";
+
+  return `${start} — ${end}`;
+};
 
 const resolveAttendanceStatus = ({
   loginMinutes = 0,
@@ -129,42 +173,29 @@ const resolveAttendanceStatus = ({
   halfDayCutoffMinutes = 120,
   absentCutoffMinutes = 180,
 }) => {
-  if (loginMinutes <= shiftStartMinutes) return 'early';
+  if (loginMinutes <= shiftStartMinutes) {
+    return "early";
+  }
 
   if (loginMinutes <= shiftStartMinutes + graceMinutes) {
-    return 'present';
+    return "present";
   }
 
-  if (loginMinutes >= shiftStartMinutes + absentCutoffMinutes) {
-    return 'absent';
+  if (
+    loginMinutes >=
+    shiftStartMinutes + absentCutoffMinutes
+  ) {
+    return "absent";
   }
 
-  if (loginMinutes >= shiftStartMinutes + halfDayCutoffMinutes) {
-    return 'half_day';
+  if (
+    loginMinutes >=
+    shiftStartMinutes + halfDayCutoffMinutes
+  ) {
+    return "half_day";
   }
 
-  return 'late';
-};
-
-
-const getResolvedShiftLabel = (user, shifts = []) => {
-  const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-
-  const shift = resolveActiveShift(user, shifts, todayName);
-
-  if (!shift) {
-    return 'No Shift Assigned';
-  }
-
-  const start = shift.startTime || shift.start || '09:45';
-  const end = shift.endTime || shift.end || '14:00';
-
-  return `${start} — ${end}`;
-};
-
-
-  const n = validHoursValue(value);
-  return n === null ? "—" : `${n.toFixed(digits)}h`;
+  return "late";
 };
 
 const DEFAULT_AUTO_END_BUFFER_MINUTES = 15;
