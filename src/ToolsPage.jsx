@@ -179,50 +179,286 @@ const Calculator = () => {
 // ════════════════════════════════════════════════════════════
 const CurrencyConverter = () => {
   const [from,setFrom] = useState('USD');
-  const [to,setTo]     = useState('INR');
-  const [amount,setAmount] = useState('100');
+  const [to,setTo] = useState('INR');
+  const [amount,setAmount] = useState('1000');
   const [rate,setRate] = useState(null);
   const [loading,setLoading] = useState(false);
-  const currencies = ['AED','AFN','ALL','AMD','ANG','AOA','ARS','AUD','AWG','AZN','BAM','BBD','BDT','BGN','BHD','BIF','BMD','BND','BOB','BRL','BSD','BTN','BWP','BYN','BZD','CAD','CDF','CHF','CLP','CNY','COP','CRC','CUP','CVE','CZK','DJF','DKK','DOP','DZD','EGP','ERN','ETB','EUR','FJD','FKP','FOK','GBP','GEL','GGP','GHS','GIP','GMD','GNF','GTQ','GYD','HKD','HNL','HRK','HTG','HUF','IDR','ILS','IMP','INR','IQD','IRR','ISK','JEP','JMD','JOD','JPY','KES','KGS','KHR','KID','KMF','KRW','KWD','KYD','KZT','LAK','LBP','LKR','LRD','LSL','LYD','MAD','MDL','MGA','MKD','MMK','MNT','MOP','MRU','MUR','MVR','MWK','MXN','MYR','MZN','NAD','NGN','NIO','NOK','NPR','NZD','OMR','PAB','PEN','PGK','PHP','PKR','PLN','PYG','QAR','RON','RSD','RUB','RWF','SAR','SBD','SCR','SDG','SEK','SGD','SHP','SLE','SLL','SOS','SRD','SSP','STN','SYP','SZL','THB','TJS','TMT','TND','TOP','TRY','TTD','TVD','TWD','TZS','UAH','UGX','USD','UYU','UZS','VES','VND','VUV','WST','XAF','XCD','XCG','XDR','XOF','XPF','YER','ZAR','ZMW','ZWL'];
+
+  const currencies = [
+    { code:'USD', name:'US Dollar', flag:'🇺🇸' },
+    { code:'EUR', name:'Euro', flag:'🇪🇺' },
+    { code:'GBP', name:'British Pound', flag:'🇬🇧' },
+    { code:'INR', name:'Indian Rupee', flag:'🇮🇳' },
+    { code:'AED', name:'UAE Dirham', flag:'🇦🇪' },
+    { code:'SAR', name:'Saudi Riyal', flag:'🇸🇦' },
+    { code:'JPY', name:'Japanese Yen', flag:'🇯🇵' },
+    { code:'CAD', name:'Canadian Dollar', flag:'🇨🇦' },
+    { code:'AUD', name:'Australian Dollar', flag:'🇦🇺' },
+  ];
 
   useEffect(() => {
     setLoading(true);
-    fetch(`https://api.exchangerate-api.com/v4/latest/${from}`)
-      .then(r => r.json())
-      .then(d => { setRate(d.rates[to]); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [from, to]);
 
-  const result = rate ? (parseFloat(amount||0) * rate).toFixed(2) : '—';
+    fetch(`https://api.exchangerate-api.com/v4/latest/${from}`)
+      .then(r=>r.json())
+      .then(d=>{
+        setRate(d.rates[to]);
+        setLoading(false);
+      })
+      .catch(()=>{
+        setLoading(false);
+      });
+
+  }, [from,to]);
+
+  const result = rate
+    ? (parseFloat(amount || 0) * rate).toLocaleString(undefined,{
+        minimumFractionDigits:2,
+        maximumFractionDigits:2
+      })
+    : '0.00';
+
+  const toObj = currencies.find(c=>c.code===to);
 
   return (
-    <Card style={{maxWidth:1100,width:'100%',background:'linear-gradient(135deg,rgba(15,23,42,.96),rgba(2,6,23,.96))',border:'1px solid rgba(99,102,241,.35)',borderRadius:24,padding:24,boxShadow:'0 20px 60px rgba(0,0,0,.45)'}}>
-      <h3 style={{color:C.tx,fontSize:14,fontWeight:700,marginBottom:14}}>💱 Currency Converter</h3>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 90px 1fr',gap:10,alignItems:'end'}}>
+    <div
+      style={{
+        width:'100%',
+        maxWidth:1250,
+        background:'linear-gradient(135deg,#0f172a,#020617)',
+        border:'1px solid rgba(99,102,241,.35)',
+        borderRadius:28,
+        padding:28,
+        boxShadow:'0 30px 80px rgba(0,0,0,.55)',
+      }}
+    >
+
+      <div
+        style={{
+          display:'flex',
+          justifyContent:'space-between',
+          alignItems:'center',
+          marginBottom:30,
+        }}
+      >
         <div>
-          <label style={{color:C.txm,fontSize:11,fontWeight:600,marginBottom:6,display:'block'}}>From</label>
-          <select value={from} onChange={e=>setFrom(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:16,padding:'18px 18px',color:C.tx,fontSize:16,outline:'none'}}>
-            {currencies.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <h1
+            style={{
+              color:'#fff',
+              fontSize:34,
+              fontWeight:900,
+              marginBottom:6,
+            }}
+          >
+            Currency Converter
+          </h1>
+
+          <p style={{color:C.txm,fontSize:14}}>
+            Real-time exchange rates for global currencies
+          </p>
         </div>
-        <button onClick={()=>{ const t=from; setFrom(to); setTo(t); }} style={{background:C.accS,border:`1px solid ${C.bdr}`,borderRadius:16,padding:20,cursor:'pointer',color:C.acc}}>
-          <ArrowLeftRight size={28} />
-        </button>
-        <div>
-          <label style={{color:C.txm,fontSize:11,fontWeight:600,marginBottom:6,display:'block'}}>To</label>
-          <select value={to} onChange={e=>setTo(e.target.value)} style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:16,padding:'18px 18px',color:C.tx,fontSize:16,outline:'none'}}>
-            {currencies.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+
+        <div
+          style={{
+            background:'rgba(34,197,94,.12)',
+            border:'1px solid rgba(34,197,94,.25)',
+            color:'#22c55e',
+            padding:'10px 18px',
+            borderRadius:999,
+            fontWeight:800,
+            fontSize:13,
+          }}
+        >
+          ● LIVE
         </div>
       </div>
-      <input value={amount} onChange={e=>setAmount(e.target.value)} type="number" placeholder="Amount"
-        style={{width:'100%',background:C.alt,border:`1px solid ${C.bdr}`,borderRadius:16,padding:'10px 13px',color:C.tx,fontSize:14,outline:'none',marginTop:14}} />
-      <div style={{marginTop:24,padding:'28px',background:`linear-gradient(135deg, ${C.accS}, transparent)`,borderRadius:10,border:`1px solid ${C.acc}33`}}>
-        <p style={{color:C.txm,fontSize:11,marginBottom:4}}>{amount} {from} =</p>
-        <p style={{color:C.tx,fontSize:46,fontWeight:800}}>{loading ? '...' : `${result} ${to}`}</p>
-        {rate && <p style={{color:C.txs,fontSize:10,marginTop:5}}>1 {from} = {rate.toFixed(4)} {to}</p>}
+
+      <div
+        style={{
+          display:'grid',
+          gridTemplateColumns:'1fr 120px 1fr',
+          gap:24,
+          alignItems:'center',
+        }}
+      >
+
+        <div
+          style={{
+            background:'rgba(255,255,255,.03)',
+            border:'1px solid rgba(255,255,255,.08)',
+            borderRadius:22,
+            padding:24,
+          }}
+        >
+
+          <p style={{color:C.txm,fontSize:13,marginBottom:14}}>
+            From
+          </p>
+
+          <select
+            value={from}
+            onChange={e=>setFrom(e.target.value)}
+            style={{
+              width:'100%',
+              background:'#111827',
+              border:'1px solid rgba(255,255,255,.08)',
+              borderRadius:16,
+              padding:'18px',
+              color:'#fff',
+              fontSize:18,
+              fontWeight:700,
+              outline:'none',
+              marginBottom:18,
+            }}
+          >
+            {currencies.map(c=>(
+              <option key={c.code} value={c.code}>
+                {c.flag} {c.code} - {c.name}
+              </option>
+            ))}
+          </select>
+
+          <input
+            value={amount}
+            onChange={e=>setAmount(e.target.value)}
+            type="number"
+            style={{
+              width:'100%',
+              background:'#111827',
+              border:'1px solid rgba(255,255,255,.08)',
+              borderRadius:18,
+              padding:'24px',
+              color:'#fff',
+              fontSize:42,
+              fontWeight:800,
+              outline:'none',
+            }}
+          />
+        </div>
+
+        <div style={{display:'flex',justifyContent:'center'}}>
+          <button
+            onClick={()=>{
+              const t = from;
+              setFrom(to);
+              setTo(t);
+            }}
+            style={{
+              width:84,
+              height:84,
+              borderRadius:'50%',
+              border:'1px solid rgba(99,102,241,.4)',
+              background:'radial-gradient(circle,#7c3aed,#4f46e5)',
+              color:'#fff',
+              cursor:'pointer',
+              boxShadow:'0 0 40px rgba(99,102,241,.55)',
+            }}
+          >
+            <ArrowLeftRight size={34} />
+          </button>
+        </div>
+
+        <div
+          style={{
+            background:'rgba(255,255,255,.03)',
+            border:'1px solid rgba(255,255,255,.08)',
+            borderRadius:22,
+            padding:24,
+          }}
+        >
+
+          <p style={{color:C.txm,fontSize:13,marginBottom:14}}>
+            To
+          </p>
+
+          <select
+            value={to}
+            onChange={e=>setTo(e.target.value)}
+            style={{
+              width:'100%',
+              background:'#111827',
+              border:'1px solid rgba(255,255,255,.08)',
+              borderRadius:16,
+              padding:'18px',
+              color:'#fff',
+              fontSize:18,
+              fontWeight:700,
+              outline:'none',
+              marginBottom:18,
+            }}
+          >
+            {currencies.map(c=>(
+              <option key={c.code} value={c.code}>
+                {c.flag} {c.code} - {c.name}
+              </option>
+            ))}
+          </select>
+
+          <div
+            style={{
+              background:'#111827',
+              border:'1px solid rgba(255,255,255,.08)',
+              borderRadius:18,
+              padding:'24px',
+              minHeight:110,
+            }}
+          >
+            <div
+              style={{
+                color:'#fff',
+                fontSize:42,
+                fontWeight:900,
+              }}
+            >
+              {loading ? '...' : result}
+            </div>
+
+            <div
+              style={{
+                color:C.txm,
+                marginTop:6,
+                fontSize:14,
+              }}
+            >
+              {toObj?.name}
+            </div>
+          </div>
+
+        </div>
+
       </div>
-    </Card>
+
+      <div
+        style={{
+          marginTop:28,
+          padding:20,
+          borderRadius:18,
+          border:'1px solid rgba(99,102,241,.18)',
+          background:'rgba(99,102,241,.06)',
+          display:'flex',
+          justifyContent:'space-between',
+          flexWrap:'wrap',
+          gap:16,
+        }}
+      >
+
+        <div>
+          <p style={{color:C.txm,fontSize:12}}>Exchange Rate</p>
+          <p style={{color:'#fff',fontSize:24,fontWeight:800}}>
+            1 {from} = {rate?.toFixed(4)} {to}
+          </p>
+        </div>
+
+        <div>
+          <p style={{color:C.txm,fontSize:12}}>Updated</p>
+          <p style={{color:'#22c55e',fontWeight:800}}>
+            Just now
+          </p>
+        </div>
+
+      </div>
+
+    </div>
   );
 };
 
