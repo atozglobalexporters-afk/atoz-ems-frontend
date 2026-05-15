@@ -2777,7 +2777,7 @@ function EmployeesPage({ addToast, user, globalSearch }) {
           <FormField label="Position"><Inp value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))} placeholder="Senior Developer" /></FormField>
           <FormField label="Join Date"><Inp value={form.joinDate} onChange={e => setForm(p => ({ ...p, joinDate: e.target.value }))} type="date" /></FormField>
           <div style={{ gridColumn: "1/-1" }}>
-            <FormField label="Basic Salary (₹)"><Inp value={form.basicSalary} onChange={e => setForm(p => ({ ...p, basicSalary: e.target.value }))} placeholder="e.g. 85000" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+            <FormField label="Basic Salary (₹)"><Inp value={form.basicSalary} onChange={e => setForm(p => ({ ...p, basicSalary: e.target.value }))} placeholder="e.g. 85000" type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
@@ -3299,7 +3299,7 @@ function WorklogsPage({ addToast, user }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <FormField label="Project Name"><Inp value={form.projectName} onChange={e => setForm(p => ({ ...p, projectName: e.target.value }))} placeholder="Project name…" /></FormField>
           <FormField label="Description"><textarea className="inp" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="What did you work on?" rows={3} style={{ resize: "vertical" }} /></FormField>
-          <FormField label="Hours Worked"><Inp value={form.hoursWorked} onChange={e => setForm(p => ({ ...p, hoursWorked: e.target.value }))} placeholder="e.g. 6" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+          <FormField label="Hours Worked"><Inp value={form.hoursWorked} onChange={e => setForm(p => ({ ...p, hoursWorked: e.target.value }))} placeholder="e.g. 6" type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
           <FormField label="Date"><Inp value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} type="date" disabled={!!editing} /></FormField>
           {!editing && (
             <FormField label="Attachment">
@@ -4377,7 +4377,7 @@ function SalaryPage({ addToast, user }) {
                 {MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
               </select>
             </FormField>
-            <FormField label="Year"><Inp value={form.year} onChange={e => setForm(p => ({ ...p, year: Number(e.target.value) }))} type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+            <FormField label="Year"><Inp value={form.year} onChange={e => setForm(p => ({ ...p, year: Number(e.target.value) }))} type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
             <FormField label="Status">
               <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} className="inp">
                 <option value="draft">Draft</option>
@@ -4390,7 +4390,7 @@ function SalaryPage({ addToast, user }) {
             <p style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>Earnings (Override Auto-Fill)</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[["basic","Basic"],["hra","HRA"],["da","DA"],["specialAllowance","Special Allowance"],["bonus","Bonus"]].map(([k, l]) => (
-                <FormField key={k} label={l}><Inp value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+                <FormField key={k} label={l}><Inp value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
               ))}
             </div>
           </div>
@@ -4398,14 +4398,14 @@ function SalaryPage({ addToast, user }) {
             <p style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>Deductions (Override Auto-Fill)</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[["pf","PF"],["pt","Professional Tax"],["tds","Income Tax (TDS)"],["loan","Loan / Advance"]].map(([k, l]) => (
-                <FormField key={k} label={l}><Inp value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+                <FormField key={k} label={l}><Inp value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
               ))}
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-            <FormField label="Working Days"><Inp value={form.workingDays} onChange={e => setForm(p => ({ ...p, workingDays: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
-            <FormField label="Leave Days"><Inp value={form.leaveDays} onChange={e => setForm(p => ({ ...p, leaveDays: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
-            <FormField label="Overtime Hours"><Inp value={form.overtimeHours} onChange={e => setForm(p => ({ ...p, overtimeHours: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+            <FormField label="Working Days"><Inp value={form.workingDays} onChange={e => setForm(p => ({ ...p, workingDays: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
+            <FormField label="Leave Days"><Inp value={form.leaveDays} onChange={e => setForm(p => ({ ...p, leaveDays: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
+            <FormField label="Overtime Hours"><Inp value={form.overtimeHours} onChange={e => setForm(p => ({ ...p, overtimeHours: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
           </div>
           <div style={{ background: `linear-gradient(135deg,${C.accent}22,${C.purple}22)`, border: `1px solid ${C.accent}33`, borderRadius: 12, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
@@ -4433,7 +4433,7 @@ function SalaryPage({ addToast, user }) {
                 <p style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 10, textTransform: "uppercase" }}>Earnings</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {[["basic","Basic"],["hra","HRA"],["da","DA"],["specialAllowance","Special Allowance"],["bonus","Bonus"]].map(([k, l]) => (
-                    <FormField key={k} label={l}><Inp value={editModal[k]||0} onChange={e => setEditModal(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+                    <FormField key={k} label={l}><Inp value={editModal[k]||0} onChange={e => setEditModal(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
                   ))}
                 </div>
               </div>
@@ -4441,7 +4441,7 @@ function SalaryPage({ addToast, user }) {
                 <p style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 10, textTransform: "uppercase" }}>Deductions</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {[["pf","PF"],["pt","Professional Tax"],["tds","TDS"],["loan","Loan"]].map(([k, l]) => (
-                    <FormField key={k} label={l}><Inp value={editModal[k]||0} onChange={e => setEditModal(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+                    <FormField key={k} label={l}><Inp value={editModal[k]||0} onChange={e => setEditModal(p => ({ ...p, [k]: Number(e.target.value)||0 }))} type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
                   ))}
                 </div>
               </div>
@@ -4626,13 +4626,13 @@ function OrdersPage({ addToast }) {
             <FormField label="HSN Code"><Inp value={form.hsnCode} onChange={e => setForm(p => ({ ...p, hsnCode: e.target.value }))} placeholder="e.g. 1006" /></FormField>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <FormField label="Quantity"><Inp value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} placeholder="100" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+            <FormField label="Quantity"><Inp value={form.quantity} onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} placeholder="100" type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
             <FormField label="Unit">
               <select value={form.unit} onChange={e => setForm(p => ({ ...p, unit: e.target.value }))} className="inp">
                 {["KG","MT","LT","PCS","BOX","BAG","TON"].map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </FormField>
-            <FormField label="Unit Price (₹)"><Inp value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="500" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+            <FormField label="Unit Price (₹)"><Inp value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="500" type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
           </div>
           {form.quantity && form.price && (
             <div style={{ background: C.accentG, border: `1px solid ${C.accent}28`, borderRadius: 10, padding: "10px 14px" }}>
@@ -4909,28 +4909,28 @@ function CompanyPage({ addToast, user }) {
               </div>
             </div>
             <F label="Grace Period (minutes)">
-              <Inp value={form.gracePeriodMinutes} onChange={e => setForm(p => ({ ...p, gracePeriodMinutes: e.target.value }))} placeholder="15" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" />
+              <Inp value={form.gracePeriodMinutes} onChange={e => setForm(p => ({ ...p, gracePeriodMinutes: e.target.value }))} placeholder="15" type="text" inputMode="decimal" pattern="[0-9]*" />
             </F>
             <F label="Early Login Window (minutes before start)">
-              <Inp value={form.earlyWindowMinutes} onChange={e => setForm(p => ({ ...p, earlyWindowMinutes: e.target.value }))} placeholder="30" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" />
+              <Inp value={form.earlyWindowMinutes} onChange={e => setForm(p => ({ ...p, earlyWindowMinutes: e.target.value }))} placeholder="30" type="text" inputMode="decimal" pattern="[0-9]*" />
             </F>
             <F label="Half Day Cutoff After Grace (minutes)">
-              <Inp value={form.halfDayCutoffMinutes} onChange={e => setForm(p => ({ ...p, halfDayCutoffMinutes: e.target.value }))} placeholder="105" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" />
+              <Inp value={form.halfDayCutoffMinutes} onChange={e => setForm(p => ({ ...p, halfDayCutoffMinutes: e.target.value }))} placeholder="105" type="text" inputMode="decimal" pattern="[0-9]*" />
             </F>
             <F label="Hard Absent Cutoff After Grace (minutes)">
-              <Inp value={form.absentCutoffMinutes} onChange={e => setForm(p => ({ ...p, absentCutoffMinutes: e.target.value }))} placeholder="165" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" />
+              <Inp value={form.absentCutoffMinutes} onChange={e => setForm(p => ({ ...p, absentCutoffMinutes: e.target.value }))} placeholder="165" type="text" inputMode="decimal" pattern="[0-9]*" />
             </F>
             <F label="Minimum Work Hours (for Present)">
-              <Inp value={form.minWorkingHours} onChange={e => setForm(p => ({ ...p, minWorkingHours: e.target.value }))} placeholder="7" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" />
+              <Inp value={form.minWorkingHours} onChange={e => setForm(p => ({ ...p, minWorkingHours: e.target.value }))} placeholder="7" type="text" inputMode="decimal" pattern="[0-9]*" />
             </F>
             <F label="Half Day Threshold (hours)">
-              <Inp value={form.halfDayHours} onChange={e => setForm(p => ({ ...p, halfDayHours: e.target.value }))} placeholder="4" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" />
+              <Inp value={form.halfDayHours} onChange={e => setForm(p => ({ ...p, halfDayHours: e.target.value }))} placeholder="4" type="text" inputMode="decimal" pattern="[0-9]*" />
             </F>
             <F label="Session Timeout (hours)">
-              <Inp value={form.sessionTimeoutHours} onChange={e => setForm(p => ({ ...p, sessionTimeoutHours: e.target.value }))} placeholder="8" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" />
+              <Inp value={form.sessionTimeoutHours} onChange={e => setForm(p => ({ ...p, sessionTimeoutHours: e.target.value }))} placeholder="8" type="text" inputMode="decimal" pattern="[0-9]*" />
             </F>
             <F label="Auto End Buffer After Shift End (minutes)">
-              <Inp value={form.autoEndBufferMinutes} onChange={e => setForm(p => ({ ...p, autoEndBufferMinutes: e.target.value }))} placeholder="0" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" />
+              <Inp value={form.autoEndBufferMinutes} onChange={e => setForm(p => ({ ...p, autoEndBufferMinutes: e.target.value }))} placeholder="0" type="text" inputMode="decimal" pattern="[0-9]*" />
             </F>
           </div>
 
@@ -5574,7 +5574,7 @@ function OrganizationPage({ addToast, user }) {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <FormField label="Website"><Inp value={form.website} onChange={e => setForm(p => ({ ...p, website: e.target.value }))} placeholder="https://nexus.com" /></FormField>
-                  <FormField label="Founded Year"><Inp value={form.foundedYear} onChange={e => setForm(p => ({ ...p, foundedYear: e.target.value }))} placeholder="2010" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+                  <FormField label="Founded Year"><Inp value={form.foundedYear} onChange={e => setForm(p => ({ ...p, foundedYear: e.target.value }))} placeholder="2010" type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
                 </div>
                 <FormField label="Address"><Inp value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="123 Business Park, Mumbai" /></FormField>
                 <FormField label="Vision Statement"><textarea className="inp" value={form.vision} onChange={e => setForm(p => ({ ...p, vision: e.target.value }))} placeholder="Our vision..." rows={3} style={{ resize: "vertical" }} /></FormField>
@@ -5851,7 +5851,7 @@ function ProjectsPage({ addToast, user }) {
             </FormField>
             <FormField label="Deadline"><Inp value={form.deadline} onChange={e => setForm(p => ({ ...p, deadline: e.target.value }))} type="date" /></FormField>
           </div>
-          <FormField label="Budget (₹)"><Inp value={form.budget} onChange={e => setForm(p => ({ ...p, budget: e.target.value }))} placeholder="e.g. 500000" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+          <FormField label="Budget (₹)"><Inp value={form.budget} onChange={e => setForm(p => ({ ...p, budget: e.target.value }))} placeholder="e.g. 500000" type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
           <FormField label="Team Members">
             <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
               {allUsers.map(u => (
@@ -5966,7 +5966,7 @@ function TimesheetPage({ addToast, user }) {
             {form.entries.map((entry, i) => (
               <div key={i} style={{ textAlign: "center" }}>
                 <p style={{ fontSize: 11, fontWeight: 700, color: C.t3, marginBottom: 6 }}>{entry.day}</p>
-                <input className="inp" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" value={entry.hours} onChange={e => updateEntry(i, "hours", e.target.value)} placeholder="0" min="0" max="24" style={{ textAlign: "center", padding: "8px 4px" }} />
+                <input className="inp" type="text" inputMode="decimal" pattern="[0-9]*" value={entry.hours} onChange={e => updateEntry(i, "hours", e.target.value)} placeholder="0" min="0" max="24" style={{ textAlign: "center", padding: "8px 4px" }} />
               </div>
             ))}
           </div>
@@ -6158,7 +6158,7 @@ function BankingPage({ addToast, user }) {
             <FormField label="IFSC Code"><Inp value={acctForm.ifsc} onChange={e => setAcctForm(p => ({ ...p, ifsc: e.target.value.toUpperCase() }))} placeholder="HDFC0001234" /></FormField>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormField label="Opening Balance (₹)"><Inp value={acctForm.openingBalance} onChange={e => setAcctForm(p => ({ ...p, openingBalance: e.target.value }))} placeholder="0" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+            <FormField label="Opening Balance (₹)"><Inp value={acctForm.openingBalance} onChange={e => setAcctForm(p => ({ ...p, openingBalance: e.target.value }))} placeholder="0" type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
             <FormField label="Opening Date"><Inp value={acctForm.openingDate} onChange={e => setAcctForm(p => ({ ...p, openingDate: e.target.value }))} type="date" /></FormField>
           </div>
           <FormField label="Notes"><textarea className="inp" value={acctForm.notes} onChange={e => setAcctForm(p => ({ ...p, notes: e.target.value }))} placeholder="Optional notes..." rows={2} style={{ resize: "vertical" }} /></FormField>
@@ -6327,7 +6327,7 @@ function BankAccountDetail({ account, onBack, onDeleted, addToast, user }) {
           </div>
           <FormField label="Description *"><Inp value={txnForm.description} onChange={e => setTxnForm(p => ({ ...p, description: e.target.value }))} placeholder="e.g. Invoice payment from ABC Corp" /></FormField>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <FormField label="Amount (₹) *"><Inp value={txnForm.amount} onChange={e => setTxnForm(p => ({ ...p, amount: e.target.value }))} placeholder="0.00" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+            <FormField label="Amount (₹) *"><Inp value={txnForm.amount} onChange={e => setTxnForm(p => ({ ...p, amount: e.target.value }))} placeholder="0.00" type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
             <FormField label="Category">
               <select value={txnForm.category} onChange={e => setTxnForm(p => ({ ...p, category: e.target.value }))} className="inp">
                 <option value="Income">Income</option>
@@ -6423,7 +6423,7 @@ function PayrollPage({ addToast, user }) {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <FormField label="Month"><select value={month} onChange={e => setMonth(Number(e.target.value))} className="inp">{MONTHS.map((m, i) => <option key={i} value={i+1}>{m}</option>)}</select></FormField>
-            <FormField label="Year"><Inp value={year} onChange={e => setYear(Number(e.target.value))} type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+            <FormField label="Year"><Inp value={year} onChange={e => setYear(Number(e.target.value))} type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
           </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button className="btn-ghost" onClick={() => setGenModal(false)}>Cancel</button>
@@ -6515,7 +6515,7 @@ function ExpensesPage({ addToast, user }) {
           <FormField label="Expense Title"><Inp value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="e.g. Client meeting lunch" /></FormField>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <FormField label="Category"><select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className="inp">{categories.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}</select></FormField>
-            <FormField label="Amount (₹)"><Inp value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="e.g. 2500" type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" /></FormField>
+            <FormField label="Amount (₹)"><Inp value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="e.g. 2500" type="text" inputMode="decimal" pattern="[0-9]*" /></FormField>
           </div>
           <FormField label="Date"><Inp value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} type="date" /></FormField>
           <FormField label="Description"><textarea className="inp" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Expense details..." rows={3} style={{ resize: "vertical" }} /></FormField>
@@ -6665,7 +6665,7 @@ function ReportsPage({ addToast, user }) {
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={expenseCatData} barSize={24} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-              <XAxis type="text" inputMode="decimal" pattern="[0-9]*" pattern="[0-9]*" tick={{ fill: C.t3, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
+              <XAxis type="text" inputMode="decimal" pattern="[0-9]*" tick={{ fill: C.t3, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${(v/1000).toFixed(0)}k`} />
               <YAxis type="category" dataKey="name" tick={{ fill: C.t3, fontSize: 11 }} axisLine={false} tickLine={false} width={90} />
               <Tooltip content={<CustomTooltip />} formatter={v => [`₹${Number(v).toLocaleString("en-IN")}`, "Amount"]} />
               <Bar dataKey="value" name="Amount" radius={[0,4,4,0]}>{expenseCatData.map((_, i) => <Cell key={i} fill={CC[i % CC.length]} />)}</Bar>
