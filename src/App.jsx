@@ -686,7 +686,7 @@ function FormField({ label, children }) {
   );
 }
 
-function Inp({ value, onChange, placeholder, type = "text", icon: Icon, style: ext, disabled, showToggle = false, autoComplete, name, onKeyDown, maxLength }) {
+function Inp({ value, onChange, placeholder, type = "text", icon: Icon, style: ext, disabled, showToggle = false, autoComplete, name, onKeyDown, maxLength, ...inputProps }) {
   const [show, setShow] = useState(false);
   const isPassword = type === "password";
   const effectiveType = isPassword && showToggle && show ? "text" : type;
@@ -694,7 +694,7 @@ function Inp({ value, onChange, placeholder, type = "text", icon: Icon, style: e
     <div style={{ position: "relative", ...ext }}>
       {Icon && <Icon size={14} color={C.t3} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />}
       <input className="inp" type={effectiveType} value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
-        autoComplete={autoComplete} name={name} onKeyDown={onKeyDown} maxLength={maxLength}
+        autoComplete={autoComplete} name={name} onKeyDown={onKeyDown} maxLength={maxLength} {...inputProps}
         style={{ paddingLeft: Icon ? 34 : 12, paddingRight: showToggle && isPassword ? 38 : 12, opacity: disabled ? 0.6 : 1 }} />
       {showToggle && isPassword && (
         <button type="button" tabIndex={-1} onClick={() => setShow(s => !s)} aria-label={show ? "Hide password" : "Show password"}
@@ -4867,7 +4867,6 @@ function CompanyPage({ addToast, user }) {
 
   if (!isAdmin(user)) return <PageShell title="Settings" sub="Company configuration"><div style={{ textAlign:"center", padding:"60px 0", color:C.t2 }}>Admin access required</div></PageShell>;
 
-  const F = ({ label, children }) => <FormField label={label}>{children}</FormField>;
 
   return (
     <PageShell title="Company Settings" sub="Configure your organization and attendance rules">
@@ -4875,7 +4874,7 @@ function CompanyPage({ addToast, user }) {
         {/* General */}
         <div className="card" style={{ padding: 24, marginBottom: 16 }}>
           <h2 style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 18 }}>General</h2>
-          <F label="Company Name"><Inp value={form.companyName} onChange={e => setForm(p => ({ ...p, companyName: e.target.value }))} placeholder="Nexus Enterprises…" /></F>
+          <FormField label="Company Name"><Inp value={form.companyName} onChange={e => setForm(p => ({ ...p, companyName: e.target.value }))} placeholder="Nexus Enterprises…" /></FormField>
         </div>
 
         {/* Attendance Session Settings */}
@@ -4908,30 +4907,30 @@ function CompanyPage({ addToast, user }) {
                 </select>
               </div>
             </div>
-            <F label="Grace Period (minutes)">
+            <FormField label="Grace Period (minutes)">
               <Inp value={form.gracePeriodMinutes} onChange={e => setForm(p => ({ ...p, gracePeriodMinutes: e.target.value }))} placeholder="15" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </F>
-            <F label="Early Login Window (minutes before start)">
+            </FormField>
+            <FormField label="Early Login Window (minutes before start)">
               <Inp value={form.earlyWindowMinutes} onChange={e => setForm(p => ({ ...p, earlyWindowMinutes: e.target.value }))} placeholder="30" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </F>
-            <F label="Half Day Cutoff After Grace (minutes)">
+            </FormField>
+            <FormField label="Half Day Cutoff After Grace (minutes)">
               <Inp value={form.halfDayCutoffMinutes} onChange={e => setForm(p => ({ ...p, halfDayCutoffMinutes: e.target.value }))} placeholder="105" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </F>
-            <F label="Hard Absent Cutoff After Grace (minutes)">
+            </FormField>
+            <FormField label="Hard Absent Cutoff After Grace (minutes)">
               <Inp value={form.absentCutoffMinutes} onChange={e => setForm(p => ({ ...p, absentCutoffMinutes: e.target.value }))} placeholder="165" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </F>
-            <F label="Minimum Work Hours (for Present)">
+            </FormField>
+            <FormField label="Minimum Work Hours (for Present)">
               <Inp value={form.minWorkingHours} onChange={e => setForm(p => ({ ...p, minWorkingHours: e.target.value }))} placeholder="7" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </F>
-            <F label="Half Day Threshold (hours)">
+            </FormField>
+            <FormField label="Half Day Threshold (hours)">
               <Inp value={form.halfDayHours} onChange={e => setForm(p => ({ ...p, halfDayHours: e.target.value }))} placeholder="4" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </F>
-            <F label="Session Timeout (hours)">
+            </FormField>
+            <FormField label="Session Timeout (hours)">
               <Inp value={form.sessionTimeoutHours} onChange={e => setForm(p => ({ ...p, sessionTimeoutHours: e.target.value }))} placeholder="8" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </F>
-            <F label="Auto End Buffer After Shift End (minutes)">
+            </FormField>
+            <FormField label="Auto End Buffer After Shift End (minutes)">
               <Inp value={form.autoEndBufferMinutes} onChange={e => setForm(p => ({ ...p, autoEndBufferMinutes: e.target.value }))} placeholder="0" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </F>
+            </FormField>
           </div>
 
           {/* Auto End Session */}
