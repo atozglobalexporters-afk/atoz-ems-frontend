@@ -68,9 +68,50 @@ const validHoursValue = (value) => {
   return Number.isFinite(n) && n >= 0 ? n : null;
 };
 
-const fmtHours = (value, digits = 1) => {
-  const n = validHoursValue(value);
-  return n === null ? "—" : `${n.toFixed(digits)}h`;
+// Attendance hours must always be a realistic single-day value.
+// This prevents corrupted legacy rows like 494075.7h from reaching the UI.
+const safeAttendanceHours = (value, digits = 1) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  if (n < 0 || n > 24) return "—";
+  return `${n.toFixed(digits)}h`;
+};
+
+const fmtHours = (value, digits = 1) => safeAttendanceHours(value, digits);
+
+// Use live attendance settings from /attendance/today for display.
+// Do not format shiftStart/shiftEnd Date windows here; those can timezone-shift in the browser.
+const formatShiftFromSettings = (settings) => {
+  if (!settings) return "No Shift Assigned";
+
+  const readNum = (...keys) => {
+    for (const key of keys) {
+      const v = settings?.[key];
+      if (v !== undefined && v !== null && v !== "") {
+        const n = Number(v);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+    return null;
+  };
+
+  const startHour = readNum("startHour", "shiftStartHour", "loginStartHour");
+  const startMinute = readNum("startMinute", "shiftStartMinute", "loginStartMinute") ?? 0;
+  const endHour = readNum("endHour", "shiftEndHour", "logoutEndHour");
+  const endMinute = readNum("endMinute", "shiftEndMinute", "logoutEndMinute") ?? 0;
+
+  if (startHour === null || endHour === null) return "No Shift Assigned";
+
+  const format = (h, m) => {
+    const hour = Number(h);
+    const minute = Number(m);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return "—";
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hh = ((hour + 11) % 12) + 1;
+    return `${String(hh).padStart(2, "0")}:${String(minute).padStart(2, "0")} ${ampm}`;
+  };
+
+  return `${format(startHour, startMinute)} — ${format(endHour, endMinute)}`;
 };
 
 // ─── SHIFT RESOLUTION ─────────────────────────────────────────
@@ -1436,7 +1477,7 @@ function DashboardPage({ addToast, user, setPage }) {
       const r = await apiFetch("/attendance/checkout", { method: "POST" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.message || "Failed");
-      addToast("Session ended. " + (fmtHours(d.attendance?.totalHours) !== "—" ? `Total: ${fmtHours(d.attendance.totalHours)} · ${d.attendance.status}` : ""), "success", {
+      addToast("Session ended. " + (safeAttendanceHours(d.attendance?.totalHours) !== "—" ? `Total: ${safeAttendanceHours(d.attendance.totalHours)} · ${d.attendance.status}` : ""), "success", {
         label: "UNDO",
         onClick: async () => {
           try {
@@ -1631,7 +1672,7 @@ function DashboardPage({ addToast, user, setPage }) {
                 <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
                   <p style={{ fontSize: 11, color: C.t2, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Elapsed Time</p>
                   <p style={{ fontSize: 16, fontWeight: 800, color: sessionActive ? C.accent : C.t3, fontVariantNumeric: "tabular-nums" }}>
-                    {sessionActive ? fmtElapsed(elapsedSecs) : fmtHours(todayRec?.totalHours) !== "—" ? `${fmtHours(todayRec.totalHours)} total` : "—"}
+                    {sessionActive ? fmtElapsed(elapsedSecs) : safeAttendanceHours(todayRec?.totalHours) !== "—" ? `${safeAttendanceHours(todayRec.totalHours)} total` : "—"}
                   </p>
                   <p style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>{sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start"}</p>
                 </div>
@@ -1666,7 +1707,7 @@ function DashboardPage({ addToast, user, setPage }) {
                 )
               ) : (
                 <div style={{ padding: "12px 16px", background: C.blue + "14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
-                  <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed for today · {fmtHours(todayRec?.totalHours) !== "—" ? `${fmtHours(todayRec.totalHours)} worked` : ""}</p>
+                  <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed for today · {safeAttendanceHours(todayRec?.totalHours) !== "—" ? `${safeAttendanceHours(todayRec.totalHours)} worked` : ""}</p>
                 </div>
               )}
             </div>
@@ -2855,7 +2896,7 @@ function AttendancePage({ addToast, user }) {
         }));
         setRecords(recs);
         setUsers(safeArr(uR.value, "users", "data"));
-        setSettings(sR.value?.company || sR.value);
+        setSettings(tR.value?.settings || tR.value?.attendance?.settings || sR.value?.company || sR.value);
         // admin gets their own today record for check-in/out card
         setTodayRec(tR.value?.attendance || null);
         setWindows(tR.value?.windows || null);
@@ -2872,7 +2913,7 @@ function AttendancePage({ addToast, user }) {
           hoursWorked: r.hoursWorked ?? r.totalHours ?? 0,
         }));
         setRecords(recs);
-        setSettings(sR.value?.company || sR.value);
+        setSettings(tR.value?.settings || tR.value?.attendance?.settings || sR.value?.company || sR.value);
         // prefer the live /today endpoint over searching the list
         setTodayRec(tR.value?.attendance || recs.find(r => r.date && new Date(r.date).toDateString() === new Date().toDateString()) || null);
         setWindows(tR.value?.windows || null);
@@ -2987,8 +3028,7 @@ function AttendancePage({ addToast, user }) {
         const elapsedSecs   = todayRec?.checkIn && !sessionDone ? Math.floor((liveTime - new Date(todayRec.checkIn)) / 1000) : 0;
         const statusColor   = sessionDone ? C.blue : sessionActive ? C.green : C.t3;
         const statusLabel   = sessionDone ? "Completed" : sessionActive ? "● Live" : "Not Started";
-        const fmtT          = d => d ? new Date(d).toLocaleTimeString("en-IN",{ hour:"2-digit", minute:"2-digit", hour12:true }) : "—";
-        const shiftWindowText = windows ? `${fmtT(windows.shiftStart)} — ${fmtT(windows.shiftEnd)}` : "—";
+        const shiftWindowText = formatShiftFromSettings(settings);
         // Pre-check-in hint: what would happen if user clicks Start now?
         let hint = null;
         if (!sessionActive && !sessionDone && wouldBe) {
@@ -3009,14 +3049,14 @@ function AttendancePage({ addToast, user }) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>My Work Session</h2>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                {windows && <span style={{ fontSize: 11, color: C.t2 }}>Shift: {shiftWindowText}</span>}
+                <span style={{ fontSize: 11, color: C.t2 }}>Shift: {shiftWindowText}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: statusColor + "18", padding: "4px 12px", borderRadius: 20 }}>{statusLabel}</span>
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: hint ? 14 : 20 }}>
               {[
                 { label: "Session Started", value: todayRec?.checkIn ? formatTime(todayRec.checkIn) : "—", sub: todayRec?.checkIn ? new Date(todayRec.checkIn).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "Not started yet", color: todayRec?.checkIn ? C.green : C.t3 },
-                { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : fmtHours(todayRec?.totalHours) !== "—" ? fmtHours(todayRec.totalHours)+" total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
+                { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : safeAttendanceHours(todayRec?.totalHours) !== "—" ? safeAttendanceHours(todayRec.totalHours)+" total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
                 { label: "Session End",     value: todayRec?.checkOut ? formatTime(todayRec.checkOut) : "—", sub: todayRec?.checkOut ? "Checked out" : "Still running", color: todayRec?.checkOut ? C.red : C.t3 },
               ].map(x => (
                 <div key={x.label} style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
@@ -3033,7 +3073,7 @@ function AttendancePage({ addToast, user }) {
             )}
             {sessionDone ? (
               <div style={{ padding: "12px 16px", background: C.blue+"14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
-                <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {fmtHours(todayRec?.totalHours) !== "—" ? fmtHours(todayRec.totalHours)+" worked" : ""} · {statusBadge(todayRec?.status)}</p>
+                <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {safeAttendanceHours(todayRec?.totalHours) !== "—" ? safeAttendanceHours(todayRec.totalHours)+" worked" : ""} · {statusBadge(todayRec?.status)}</p>
                 <p style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>You're done for today. Re-check-in is disabled.</p>
               </div>
             ) : sessionActive ? (
@@ -3109,7 +3149,7 @@ function AttendancePage({ addToast, user }) {
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{formatDate(row.date)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.green, fontWeight: 500 }}>{formatTime(row.checkIn || row.loginTime)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.red, fontWeight: 500 }}>{formatTime(row.checkOut || row.logoutTime)}</td>
-                <td style={{ padding: "12px 16px", fontSize: 13 }}>{fmtHours(row.totalHours || row.hoursWorked) !== "—" ? <span style={{ color: C.cyan, fontWeight: 600 }}>{fmtHours(row.totalHours || row.hoursWorked)}</span> : "—"}</td>
+                <td style={{ padding: "12px 16px", fontSize: 13 }}>{safeAttendanceHours(row.totalHours ?? row.hoursWorked) !== "—" ? <span style={{ color: C.cyan, fontWeight: 600 }}>{safeAttendanceHours(row.totalHours ?? row.hoursWorked)}</span> : "—"}</td>
                 <td style={{ padding: "12px 16px" }}>{statusBadge(row.status)}</td>
                 {isAdmin(user) && <td style={{ padding: "12px 16px" }}><button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => { setOverrideForm({ userId: row.user?._id || row.userId?._id || row.userId || "", date: row.date?.split("T")[0] || new Date().toISOString().split("T")[0], status: row.status || "present", note: "" }); setOverrideModal(true); }}><Edit2 size={12} /></button></td>}
               </tr>
