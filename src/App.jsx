@@ -2868,6 +2868,11 @@ function AttendancePage({ addToast, user }) {
   const [settings, setSettings] = useState(null);
   const [windows, setWindows] = useState(null);
   const [wouldBe, setWouldBe] = useState(null);
+  const [activeBreak, setActiveBreak] = useState(null);
+  const [breakLogs, setBreakLogs] = useState([]);
+  const [breakLoading, setBreakLoading] = useState(false);
+  const [breakReason, setBreakReason] = useState("");
+  const [breakReview, setBreakReview] = useState(null);
   const [search, setSearch] = useState("");
   const [liveTime, setLiveTime] = useState(new Date());
   useEffect(() => {
@@ -2883,11 +2888,12 @@ function AttendancePage({ addToast, user }) {
     setLoading(true);
     try {
       if (isAdmin(user)) {
-        const [aR, uR, sR, tR] = await Promise.allSettled([
+        const [aR, uR, sR, tR, bR] = await Promise.allSettled([
           apiFetch(tab === "monthly" ? `/attendance?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
           apiFetch("/users").then(r => r.json()),
           apiFetch("/company").then(r => r.json()),
           apiFetch("/attendance/today").then(r => r.json()),
+          apiFetch("/attendance/breaks").then(r => r.json()),
         ]);
         const recs = safeArr(aR.value, "attendance", "records", "data").map(r => ({
           ...r,
@@ -2901,11 +2907,14 @@ function AttendancePage({ addToast, user }) {
         setTodayRec(tR.value?.attendance || null);
         setWindows(tR.value?.windows || null);
         setWouldBe(tR.value?.wouldBe || null);
+        setActiveBreak(tR.value?.activeBreak || null);
+        setBreakLogs(safeArr(bR.value, "breaks", "data"));
       } else {
-        const [aR, sR, tR] = await Promise.allSettled([
+        const [aR, sR, tR, bR] = await Promise.allSettled([
           apiFetch(tab === "monthly" ? `/attendance/monthly?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
           apiFetch("/company").then(r => r.json()),
           apiFetch("/attendance/today").then(r => r.json()),
+          apiFetch("/attendance/breaks").then(r => r.json()),
         ]);
         const recs = safeArr(aR.value, "attendance", "records", "data").map(r => ({
           ...r,
@@ -2918,6 +2927,8 @@ function AttendancePage({ addToast, user }) {
         setTodayRec(tR.value?.attendance || recs.find(r => r.date && new Date(r.date).toDateString() === new Date().toDateString()) || null);
         setWindows(tR.value?.windows || null);
         setWouldBe(tR.value?.wouldBe || null);
+        setActiveBreak(tR.value?.activeBreak || null);
+        setBreakLogs(safeArr(bR.value, "breaks", "data"));
       }
     } catch { addToast("Failed to load attendance", "error"); }
     setLoading(false);
@@ -2970,6 +2981,53 @@ function AttendancePage({ addToast, user }) {
     setCheckLoading(false);
   };
 
+
+  const handleStartBreak = async () => {
+    setBreakLoading(true);
+    try {
+      const r = await apiFetch("/attendance/break/start", { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || "Could not start break");
+      addToast(d.message || "Break started", "success");
+      setBreakReason("");
+      load();
+    } catch (e) { addToast(e.message || "Could not start break", "error"); }
+    setBreakLoading(false);
+  };
+
+  const handleEndBreak = async () => {
+    setBreakLoading(true);
+    try {
+      const r = await apiFetch("/attendance/break/end", {
+        method: "POST",
+        body: JSON.stringify({ employeeReason: breakReason }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || "Could not end break");
+      addToast(d.message || "Break ended", d.breakLog?.lateMinutes > 0 ? "warning" : "success");
+      setBreakReason("");
+      load();
+    } catch (e) { addToast(e.message || "Could not end break", "error"); }
+    setBreakLoading(false);
+  };
+
+  const handleReviewBreak = async () => {
+    if (!breakReview?.log?._id) return;
+    setBreakLoading(true);
+    try {
+      const r = await apiFetch(`/attendance/breaks/${breakReview.log._id}/review`, {
+        method: "PUT",
+        body: JSON.stringify({ superAdminComment: breakReview.comment || "" }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || "Could not review break");
+      addToast("Break review saved", "success");
+      setBreakReview(null);
+      load();
+    } catch (e) { addToast(e.message || "Could not review break", "error"); }
+    setBreakLoading(false);
+  };
+
   const handleOverride = async () => {
     try {
       const r = await apiFetch("/attendance/admin-override", { method: "POST", body: JSON.stringify(overrideForm) });
@@ -2989,6 +3047,7 @@ function AttendancePage({ addToast, user }) {
   const getDotColor = s => { const sl = s?.toLowerCase(); if (["present","on_time"].includes(sl)) return C.green; if (sl==="early") return C.cyan || C.green; if (sl==="absent") return C.red; if (sl==="late") return C.amber; if (sl==="half_day") return C.blue; if (sl==="on_leave"||sl==="on leave") return C.purple; if (sl==="holiday") return C.purple; return C.t3; };
   const formatTime = t => { if (!t) return "—"; try { return new Date(t).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }); } catch { return t; } };
   const formatDate = t => { if (!t) return "—"; try { return new Date(t).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); } catch { return t; } };
+  const fmtMinutes = mins => { const n = Number(mins); return Number.isFinite(n) ? `${n} min` : "—"; };
 
   return (
     <PageShell title="Attendance" sub={isAdmin(user) ? "Manage employee attendance" : "Your attendance records"}
@@ -3089,6 +3148,79 @@ function AttendancePage({ addToast, user }) {
         );
       })()}
 
+      {(() => {
+        const sessionActive = todayRec?.sessionActive || (todayRec?.checkIn && !todayRec?.checkOut);
+        const sessionDone = !!todayRec?.checkOut;
+        const breakEnabled = settings?.breakEnabled !== false;
+        const allowedMinutes = Number(activeBreak?.allowedMinutes || settings?.breakAllowedMinutes || 15);
+        const breakElapsed = activeBreak?.breakStart ? Math.max(0, Math.floor((liveTime - new Date(activeBreak.breakStart)) / 1000)) : 0;
+        const remaining = allowedMinutes * 60 - breakElapsed;
+        const isLateBreak = activeBreak && remaining < 0;
+        const lateMinutes = isLateBreak ? Math.ceil(Math.abs(remaining) / 60) : 0;
+        const myBreaksToday = breakLogs.filter(b => !isAdmin(user) || String(b.user?._id || b.user) === String(user?._id || user?.id));
+        if (!sessionActive && !activeBreak) return null;
+        return (
+          <div className="card" style={{ padding: 22, marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>Break Control</h2>
+                <p style={{ fontSize: 12, color: C.t2, marginTop: 3 }}>
+                  Allowed: {fmtMinutes(settings?.breakAllowedMinutes || allowedMinutes)} · Limit: {settings?.maxBreaksPerDay || 2} per day
+                </p>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 800, color: activeBreak ? (isLateBreak ? C.red : C.amber) : C.green, background: (activeBreak ? (isLateBreak ? C.red : C.amber) : C.green) + "18", border: `1px solid ${(activeBreak ? (isLateBreak ? C.red : C.amber) : C.green)}33`, padding: "5px 12px", borderRadius: 20 }}>
+                {activeBreak ? (isLateBreak ? `LATE BY ${lateMinutes} MIN` : "ON BREAK") : "ACTIVE"}
+              </span>
+            </div>
+
+            {!breakEnabled ? (
+              <div style={{ padding: 12, borderRadius: 12, background: C.red + "12", border: `1px solid ${C.red}33`, color: C.red, fontSize: 13, fontWeight: 600 }}>
+                Break requests are disabled by super admin.
+              </div>
+            ) : sessionDone ? (
+              <div style={{ padding: 12, borderRadius: 12, background: C.blue + "12", border: `1px solid ${C.blue}33`, color: C.blue, fontSize: 13, fontWeight: 600 }}>
+                Session completed. Breaks are closed for today.
+              </div>
+            ) : activeBreak ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                  <div style={{ padding: 14, borderRadius: 12, border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.03)" }}>
+                    <p style={{ fontSize: 10, color: C.t2, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Started</p>
+                    <p style={{ fontSize: 16, fontWeight: 800, color: C.t1 }}>{formatTime(activeBreak.breakStart)}</p>
+                  </div>
+                  <div style={{ padding: 14, borderRadius: 12, border: `1px solid ${isLateBreak ? C.red + "55" : C.border}`, background: isLateBreak ? C.red + "10" : "rgba(255,255,255,0.03)" }}>
+                    <p style={{ fontSize: 10, color: C.t2, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>{isLateBreak ? "Extra Time" : "Time Left"}</p>
+                    <p style={{ fontSize: 18, fontWeight: 900, color: isLateBreak ? C.red : C.amber, fontVariantNumeric: "tabular-nums" }}>{fmtElapsed(isLateBreak ? Math.abs(remaining) : remaining)}</p>
+                  </div>
+                  <div style={{ padding: 14, borderRadius: 12, border: `1px solid ${C.border}`, background: "rgba(255,255,255,0.03)" }}>
+                    <p style={{ fontSize: 10, color: C.t2, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Allowed</p>
+                    <p style={{ fontSize: 16, fontWeight: 800, color: C.cyan }}>{allowedMinutes} min</p>
+                  </div>
+                </div>
+                {isLateBreak && (
+                  <FormField label="Optional reason for late break return">
+                    <textarea className="inp" value={breakReason} onChange={e => setBreakReason(e.target.value)} placeholder="Example: urgent phone call, client call, etc." rows={2} />
+                  </FormField>
+                )}
+                <button onClick={handleEndBreak} disabled={breakLoading} style={{ width: "100%", padding: "13px", background: `linear-gradient(135deg,${C.green},#16a34a)`, border: "none", borderRadius: 12, color: "#fff", fontWeight: 800, fontSize: 14, cursor: breakLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: breakLoading ? 0.7 : 1 }}>
+                  <CheckCircle2 size={16} />{breakLoading ? "Resuming…" : "Resume Work"}
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+                <button onClick={handleStartBreak} disabled={breakLoading || !sessionActive} style={{ width: "100%", padding: "13px", background: sessionActive ? `linear-gradient(135deg,${C.amber},#d97706)` : C.t3, border: "none", borderRadius: 12, color: "#fff", fontWeight: 800, fontSize: 14, cursor: breakLoading || !sessionActive ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: breakLoading || !sessionActive ? 0.65 : 1 }}>
+                  <Clock size={16} />{breakLoading ? "Starting…" : `Start ${settings?.breakAllowedMinutes || 15} min Break`}
+                </button>
+                {myBreaksToday.length > 0 && (
+                  <p style={{ fontSize: 11, color: C.t2, textAlign: "center" }}>Breaks used today: {myBreaksToday.length}</p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+
       {tab === "monthly" && (
         <div className="card" style={{ padding: 20, marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -3158,6 +3290,53 @@ function AttendancePage({ addToast, user }) {
         </table>
       </div>
 
+
+      {isAdmin(user) && (
+        <div className="card" style={{ overflow: "hidden", marginTop: 16, marginBottom: 16 }}>
+          <div style={{ padding: "16px 18px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: 15, fontWeight: 800, color: C.t1 }}>Break Management</h2>
+              <p style={{ fontSize: 12, color: C.t2, marginTop: 3 }}>Track break duration, late returns, reasons, and super admin comments.</p>
+            </div>
+            <button className="btn-ghost" onClick={load}><RefreshCw size={13} />Refresh</button>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  {["Employee","Date","Start","End","Allowed","Actual","Late","Reason","Comment","Status",...(user?.role === "super_admin" ? ["Review"] : [])].map(h => (
+                    <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 10, fontWeight: 700, color: C.t3, letterSpacing: ".07em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {breakLogs.length === 0 ? (
+                  <tr><td colSpan={user?.role === "super_admin" ? 11 : 10} style={{ padding: "32px 16px", textAlign: "center", fontSize: 13, color: C.t2 }}>No break records yet</td></tr>
+                ) : breakLogs.map((b, i) => (
+                  <tr key={b._id || i} className="tr">
+                    <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 600 }}>{b.user?.name || "—"}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{formatDate(b.date)}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 13, color: C.green }}>{formatTime(b.breakStart)}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 13, color: C.red }}>{formatTime(b.breakEnd)}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 13 }}>{fmtMinutes(b.allowedMinutes)}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 13 }}>{fmtMinutes(b.actualMinutes)}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 13, color: Number(b.lateMinutes || 0) > 0 ? C.red : C.green, fontWeight: 700 }}>{fmtMinutes(b.lateMinutes || 0)}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: C.t2, maxWidth: 220 }}>{b.employeeReason || "—"}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: C.t2, maxWidth: 220 }}>{b.superAdminComment || "—"}</td>
+                    <td style={{ padding: "12px 16px" }}>{statusBadge(b.status)}</td>
+                    {user?.role === "super_admin" && (
+                      <td style={{ padding: "12px 16px" }}>
+                        <button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => setBreakReview({ log: b, comment: b.superAdminComment || "" })} title="Review break"><Edit2 size={12} /></button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <Modal open={overrideModal} onClose={() => setOverrideModal(false)} title="Mark / Override Attendance">
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {isAdmin(user) && (
@@ -3180,6 +3359,28 @@ function AttendancePage({ addToast, user }) {
             <button className="btn-pri" onClick={handleOverride}>Apply</button>
           </div>
         </div>
+      </Modal>
+
+
+      <Modal open={!!breakReview} onClose={() => setBreakReview(null)} title="Review Break Return" width={560}>
+        {breakReview?.log && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}` }}>
+              <p style={{ fontSize: 13, color: C.t1, fontWeight: 700 }}>{breakReview.log.user?.name || "Employee"}</p>
+              <p style={{ fontSize: 12, color: C.t2, marginTop: 4 }}>
+                Allowed {fmtMinutes(breakReview.log.allowedMinutes)} · Actual {fmtMinutes(breakReview.log.actualMinutes)} · Late {fmtMinutes(breakReview.log.lateMinutes || 0)}
+              </p>
+              <p style={{ fontSize: 12, color: C.t2, marginTop: 8 }}>Employee reason: {breakReview.log.employeeReason || "—"}</p>
+            </div>
+            <FormField label="Super Admin Comment">
+              <textarea className="inp" rows={4} value={breakReview.comment} onChange={e => setBreakReview(p => ({ ...p, comment: e.target.value }))} placeholder="Write your comment, warning, approval note, or follow-up instruction…" />
+            </FormField>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button className="btn-ghost" onClick={() => setBreakReview(null)}>Cancel</button>
+              <button className="btn-pri" onClick={handleReviewBreak} disabled={breakLoading}>{breakLoading ? "Saving…" : "Save Review"}</button>
+            </div>
+          </div>
+        )}
       </Modal>
     </PageShell>
   );
