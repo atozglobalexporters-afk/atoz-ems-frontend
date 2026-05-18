@@ -4843,7 +4843,7 @@ function CompanyPage({ addToast, user }) {
     gracePeriodMinutes: "15", earlyWindowMinutes: "30",
     halfDayCutoffMinutes: "105", absentCutoffMinutes: "165",
     minWorkingHours: "7", halfDayHours: "4",
-    autoEndBufferMinutes: "0", autoEndHour: "23", autoEndMinute: "59",
+    autoEndBufferMinutes: "0", maxSessionHours: "8", autoEndHour: "23", autoEndMinute: "59",
   });
 
   useEffect(() => {
@@ -4870,6 +4870,7 @@ function CompanyPage({ addToast, user }) {
           minWorkingHours:    String(s?.minWorkingHours ?? 7),
           halfDayHours:       String(s?.halfDayHours ?? 4),
           autoEndBufferMinutes: String(s?.autoEndBufferMinutes ?? 0),
+          maxSessionHours:    String(s?.maxSessionHours ?? 8),
           autoEndHour:        String(s?.autoEndHour ?? 23),
           autoEndMinute:      String(s?.autoEndMinute ?? 59),
         });
@@ -4895,6 +4896,7 @@ function CompanyPage({ addToast, user }) {
         minWorkingHours:    Number(form.minWorkingHours),
         halfDayHours:       Number(form.halfDayHours),
         autoEndBufferMinutes: Number(form.autoEndBufferMinutes),
+        maxSessionHours:    Math.min(20, Math.max(1, Number(form.maxSessionHours) || 8)),
         autoEndHour:        Number(form.autoEndHour),
         autoEndMinute:      Number(form.autoEndMinute),
       };
@@ -4971,12 +4973,15 @@ function CompanyPage({ addToast, user }) {
             <FormField label="Auto End Buffer After Shift End (minutes)">
               <Inp value={form.autoEndBufferMinutes} onChange={e => setForm(p => ({ ...p, autoEndBufferMinutes: e.target.value }))} placeholder="0" type="text" inputMode="decimal" pattern="[0-9]*" />
             </FormField>
+            <FormField label="Max Session Hours (1–20)">
+              <Inp value={form.maxSessionHours} onChange={e => setForm(p => ({ ...p, maxSessionHours: e.target.value }))} placeholder="8" type="text" inputMode="decimal" pattern="[0-9]*" />
+            </FormField>
           </div>
 
           {/* Auto End Session */}
           <div style={{ marginTop: 16, padding: "14px 16px", background: C.amberG, border: `1px solid ${C.amber}28`, borderRadius: 10 }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: C.amber, marginBottom: 10 }}>Auto End Session Time</p>
-            <p style={{ fontSize: 12, color: C.t2, marginBottom: 10 }}>If an employee forgets to check out, their session will be force-ended using the shift end time and buffer, or this legacy fallback time.</p>
+            <p style={{ fontSize: 12, color: C.t2, marginBottom: 10 }}>If an employee forgets to check out, their session will be force-ended at shift end + buffer OR when Max Session Hours is reached, whichever comes first.</p>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <select value={form.autoEndHour} onChange={e => setForm(p => ({ ...p, autoEndHour: e.target.value }))} className="inp" style={{ width: 90 }}>
                 {Array.from({length:24},(_,i)=><option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
