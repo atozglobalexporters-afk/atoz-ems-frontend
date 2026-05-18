@@ -5045,6 +5045,7 @@ function CompanyPage({ addToast, user }) {
     halfDayCutoffMinutes: "105", absentCutoffMinutes: "165",
     minWorkingHours: "7", halfDayHours: "4",
     autoEndBufferMinutes: "0", maxSessionHours: "8", autoEndHour: "23", autoEndMinute: "59",
+    breakEnabled: true, breakAllowedMinutes: "15", maxBreaksPerDay: "2",
   });
 
   useEffect(() => {
@@ -5074,6 +5075,9 @@ function CompanyPage({ addToast, user }) {
           maxSessionHours:    String(s?.maxSessionHours ?? 8),
           autoEndHour:        String(s?.autoEndHour ?? 23),
           autoEndMinute:      String(s?.autoEndMinute ?? 59),
+          breakEnabled:       s?.breakEnabled !== false,
+          breakAllowedMinutes: String(s?.breakAllowedMinutes ?? 15),
+          maxBreaksPerDay:    String(s?.maxBreaksPerDay ?? 2),
         });
       } catch { addToast("Failed to load settings", "error"); }
       setLoading(false);
@@ -5100,6 +5104,9 @@ function CompanyPage({ addToast, user }) {
         maxSessionHours:    Math.min(20, Math.max(1, Number(form.maxSessionHours) || 8)),
         autoEndHour:        Number(form.autoEndHour),
         autoEndMinute:      Number(form.autoEndMinute),
+        breakEnabled:       form.breakEnabled !== false,
+        breakAllowedMinutes: Math.min(240, Math.max(1, Number(form.breakAllowedMinutes) || 15)),
+        maxBreaksPerDay:    Math.min(20, Math.max(0, Number(form.maxBreaksPerDay) || 2)),
       };
       const r = await apiFetch("/company", { method: "PUT", body: JSON.stringify(payload) });
       if (!r.ok) throw new Error();
@@ -5176,6 +5183,18 @@ function CompanyPage({ addToast, user }) {
             </FormField>
             <FormField label="Max Session Hours (1–20)">
               <Inp value={form.maxSessionHours} onChange={e => setForm(p => ({ ...p, maxSessionHours: e.target.value }))} placeholder="8" type="text" inputMode="decimal" pattern="[0-9]*" />
+            </FormField>
+            <FormField label="Break Enabled">
+              <select value={form.breakEnabled ? "yes" : "no"} onChange={e => setForm(p => ({ ...p, breakEnabled: e.target.value === "yes" }))} className="inp">
+                <option value="yes">Enabled</option>
+                <option value="no">Disabled</option>
+              </select>
+            </FormField>
+            <FormField label="Break Minutes Per Break">
+              <Inp value={form.breakAllowedMinutes} onChange={e => setForm(p => ({ ...p, breakAllowedMinutes: e.target.value }))} placeholder="15" type="text" inputMode="decimal" pattern="[0-9]*" />
+            </FormField>
+            <FormField label="Max Breaks Per Day">
+              <Inp value={form.maxBreaksPerDay} onChange={e => setForm(p => ({ ...p, maxBreaksPerDay: e.target.value }))} placeholder="2" type="text" inputMode="decimal" pattern="[0-9]*" />
             </FormField>
           </div>
 
