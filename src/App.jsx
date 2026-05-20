@@ -68,46 +68,51 @@ const validHoursValue = (value) => {
   return Number.isFinite(n) && n >= 0 ? n : null;
 };
 
-const fmtHours = (value, digits = 1) => {
-  const n = validHoursValue(value);
-  return n === null ? "—" : `${n.toFixed(digits)}h`;
-};
-
-const IST_TZ = "Asia/Kolkata";
-const safeObj = (v) => v && typeof v === "object" ? v : null;
-const safeHours = (value, digits = 1) => {
+// Attendance hours must always be a realistic single-day value.
+// This prevents corrupted legacy rows like 494075.7h from reaching the UI.
+const safeAttendanceHours = (value, digits = 1) => {
   const n = Number(value);
-  if (!Number.isFinite(n) || n < 0 || n > 24) return "—";
+  if (!Number.isFinite(n)) return "—";
+  if (n < 0 || n > 24) return "—";
   return `${n.toFixed(digits)}h`;
 };
-const formatISTTime = (t) => {
-  if (!t) return "—";
-  try { return new Date(t).toLocaleTimeString("en-IN", { timeZone: IST_TZ, hour: "2-digit", minute: "2-digit", hour12: true }); } catch { return "—"; }
-};
-const formatISTDate = (t) => {
-  if (!t) return "—";
-  if (typeof t === "string" && /^\d{4}-\d{2}-\d{2}$/.test(t)) {
-    const [y,m,d] = t.split("-").map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  }
-  try { return new Date(t).toLocaleDateString("en-IN", { timeZone: IST_TZ, day: "2-digit", month: "short", year: "numeric" }); } catch { return "—"; }
-};
-const formatShiftFromSettings = (settings, windows, display) => {
-  if (display?.shiftStartIST && display?.shiftEndIST) return `${display.shiftStartIST} — ${display.shiftEndIST}`;
-  if (settings && settings.startHour !== undefined && settings.endHour !== undefined) {
-    const fmt = (h, m) => {
-      const hour = Number(h) || 0;
-      const minute = Number(m) || 0;
-      const ampm = hour >= 12 ? "PM" : "AM";
-      const hh = ((hour + 11) % 12) + 1;
-      return `${String(hh).padStart(2,"0")}:${String(minute).padStart(2,"0")} ${ampm}`;
-    };
-    return `${fmt(settings.startHour, settings.startMinute)} — ${fmt(settings.endHour, settings.endMinute)}`;
-  }
-  if (windows?.shiftStart && windows?.shiftEnd) return `${formatISTTime(windows.shiftStart)} — ${formatISTTime(windows.shiftEnd)}`;
-  return "—";
-};
 
+const fmtHours = (value, digits = 1) => safeAttendanceHours(value, digits);
+
+// Use live attendance settings from /attendance/today for display.
+// Do not format shiftStart/shiftEnd Date windows here; those can timezone-shift in the browser.
+const formatShiftFromSettings = (settings) => {
+  if (!settings) return "No Shift Assigned";
+
+  const readNum = (...keys) => {
+    for (const key of keys) {
+      const v = settings?.[key];
+      if (v !== undefined && v !== null && v !== "") {
+        const n = Number(v);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+    return null;
+  };
+
+  const startHour = readNum("startHour", "shiftStartHour", "loginStartHour");
+  const startMinute = readNum("startMinute", "shiftStartMinute", "loginStartMinute") ?? 0;
+  const endHour = readNum("endHour", "shiftEndHour", "logoutEndHour");
+  const endMinute = readNum("endMinute", "shiftEndMinute", "logoutEndMinute") ?? 0;
+
+  if (startHour === null || endHour === null) return "No Shift Assigned";
+
+  const format = (h, m) => {
+    const hour = Number(h);
+    const minute = Number(m);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return "—";
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hh = ((hour + 11) % 12) + 1;
+    return `${String(hh).padStart(2, "0")}:${String(minute).padStart(2, "0")} ${ampm}`;
+  };
+
+  return `${format(startHour, startMinute)} — ${format(endHour, endMinute)}`;
+};
 
 // ─── SHIFT RESOLUTION ─────────────────────────────────────────
 const resolveActiveShift = (user, shifts = [], todayName = "") => {
@@ -1472,7 +1477,7 @@ function DashboardPage({ addToast, user, setPage }) {
       const r = await apiFetch("/attendance/checkout", { method: "POST" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.message || "Failed");
-      addToast("Session ended. " + (fmtHours(d.attendance?.totalHours) !== "—" ? `Total: ${fmtHours(d.attendance.totalHours)} · ${d.attendance.status}` : ""), "success", {
+      addToast("Session ended. " + (safeAttendanceHours(d.attendance?.totalHours) !== "—" ? `Total: ${safeAttendanceHours(d.attendance.totalHours)} · ${d.attendance.status}` : ""), "success", {
         label: "UNDO",
         onClick: async () => {
           try {
@@ -1667,7 +1672,7 @@ function DashboardPage({ addToast, user, setPage }) {
                 <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
                   <p style={{ fontSize: 11, color: C.t2, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Elapsed Time</p>
                   <p style={{ fontSize: 16, fontWeight: 800, color: sessionActive ? C.accent : C.t3, fontVariantNumeric: "tabular-nums" }}>
-                    {sessionActive ? fmtElapsed(elapsedSecs) : safeHours(todayRec?.totalHours) !== "—" ? `${safeHours(todayRec.totalHours)} total` : "—"}
+                    {sessionActive ? fmtElapsed(elapsedSecs) : safeAttendanceHours(todayRec?.totalHours) !== "—" ? `${safeAttendanceHours(todayRec.totalHours)} total` : "—"}
                   </p>
                   <p style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>{sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start"}</p>
                 </div>
@@ -1702,7 +1707,7 @@ function DashboardPage({ addToast, user, setPage }) {
                 )
               ) : (
                 <div style={{ padding: "12px 16px", background: C.blue + "14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
-                  <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed for today · {safeHours(todayRec?.totalHours) !== "—" ? `${safeHours(todayRec.totalHours)} worked` : ""}</p>
+                  <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed for today · {safeAttendanceHours(todayRec?.totalHours) !== "—" ? `${safeAttendanceHours(todayRec.totalHours)} worked` : ""}</p>
                 </div>
               )}
             </div>
@@ -2862,12 +2867,7 @@ function AttendancePage({ addToast, user }) {
   const [todayRec, setTodayRec] = useState(null);
   const [settings, setSettings] = useState(null);
   const [windows, setWindows] = useState(null);
-  const [display, setDisplay] = useState(null);
   const [wouldBe, setWouldBe] = useState(null);
-  const [activeBreak, setActiveBreak] = useState(null);
-  const [breaks, setBreaks] = useState([]);
-  const [breakReason, setBreakReason] = useState("");
-  const [reviewComment, setReviewComment] = useState({});
   const [search, setSearch] = useState("");
   const [liveTime, setLiveTime] = useState(new Date());
   useEffect(() => {
@@ -2883,49 +2883,41 @@ function AttendancePage({ addToast, user }) {
     setLoading(true);
     try {
       if (isAdmin(user)) {
-        const [aR, uR, sR, tR, bR] = await Promise.allSettled([
+        const [aR, uR, sR, tR] = await Promise.allSettled([
           apiFetch(tab === "monthly" ? `/attendance?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
           apiFetch("/users").then(r => r.json()),
           apiFetch("/company").then(r => r.json()),
           apiFetch("/attendance/today").then(r => r.json()),
-          apiFetch("/attendance/breaks").then(r => r.json()).catch(() => ({})),
         ]);
         const recs = safeArr(aR.value, "attendance", "records", "data").map(r => ({
           ...r,
-          userId: safeObj(r.userId) || safeObj(r.user) || r.userId || r.user,
+          userId: r.userId || r.user,
           hoursWorked: r.hoursWorked ?? r.totalHours ?? 0,
         }));
         setRecords(recs);
         setUsers(safeArr(uR.value, "users", "data"));
-        setSettings(tR.value?.settings || sR.value?.company || sR.value);
+        setSettings(tR.value?.settings || tR.value?.attendance?.settings || sR.value?.company || sR.value);
         // admin gets their own today record for check-in/out card
         setTodayRec(tR.value?.attendance || null);
         setWindows(tR.value?.windows || null);
-        setDisplay(tR.value?.display || null);
         setWouldBe(tR.value?.wouldBe || null);
-        setActiveBreak(tR.value?.activeBreak || null);
-        setBreaks(safeArr(bR.value, "breaks", "data"));
       } else {
-        const [aR, sR, tR, bR] = await Promise.allSettled([
+        const [aR, sR, tR] = await Promise.allSettled([
           apiFetch(tab === "monthly" ? `/attendance/monthly?month=${month}&year=${year}` : "/attendance").then(r => r.json()),
           apiFetch("/company").then(r => r.json()),
           apiFetch("/attendance/today").then(r => r.json()),
-          apiFetch("/attendance/breaks").then(r => r.json()).catch(() => ({})),
         ]);
         const recs = safeArr(aR.value, "attendance", "records", "data").map(r => ({
           ...r,
-          userId: safeObj(r.userId) || safeObj(r.user) || r.userId || r.user,
+          userId: r.userId || r.user,
           hoursWorked: r.hoursWorked ?? r.totalHours ?? 0,
         }));
         setRecords(recs);
-        setSettings(tR.value?.settings || sR.value?.company || sR.value);
+        setSettings(tR.value?.settings || tR.value?.attendance?.settings || sR.value?.company || sR.value);
         // prefer the live /today endpoint over searching the list
         setTodayRec(tR.value?.attendance || recs.find(r => r.date && new Date(r.date).toDateString() === new Date().toDateString()) || null);
         setWindows(tR.value?.windows || null);
-        setDisplay(tR.value?.display || null);
         setWouldBe(tR.value?.wouldBe || null);
-        setActiveBreak(tR.value?.activeBreak || null);
-        setBreaks(safeArr(bR.value, "breaks", "data"));
       }
     } catch { addToast("Failed to load attendance", "error"); }
     setLoading(false);
@@ -2978,62 +2970,6 @@ function AttendancePage({ addToast, user }) {
     setCheckLoading(false);
   };
 
-
-  const handleStartBreak = async () => {
-    setCheckLoading(true);
-    try {
-      const r = await apiFetch("/attendance/break/start", { method: "POST" });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.message || "Failed to start break");
-      addToast(d.message || "Break started", "success", {
-        label: "UNDO",
-        onClick: async () => {
-          try {
-            const ur = await apiFetch("/attendance/break/undo", { method: "POST" });
-            const ud = await ur.json().catch(() => ({}));
-            if (!ur.ok) throw new Error(ud.message || "Undo break failed");
-            addToast("Break cancelled", "success");
-            load();
-          } catch (e) { addToast(e.message || "Undo break failed", "error"); }
-        }
-      });
-      load();
-    } catch (e) { addToast(e.message || "Failed to start break", "error"); }
-    setCheckLoading(false);
-  };
-
-  const handleEndBreak = async () => {
-    setCheckLoading(true);
-    try {
-      const r = await apiFetch("/attendance/break/end", { method: "POST", body: JSON.stringify({ employeeReason: breakReason }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.message || "Failed to end break");
-      setBreakReason("");
-      addToast(d.message || "Break ended", d.breakLog?.lateMinutes > 0 ? "warning" : "success");
-      load();
-    } catch (e) { addToast(e.message || "Failed to end break", "error"); }
-    setCheckLoading(false);
-  };
-
-  const handleUndoBreak = async () => {
-    try {
-      const r = await apiFetch("/attendance/break/undo", { method: "POST" });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.message || "Undo break failed");
-      addToast("Break cancelled", "success");
-      load();
-    } catch (e) { addToast(e.message || "Undo break failed", "error"); }
-  };
-
-  const handleReviewBreak = async (id) => {
-    try {
-      const r = await apiFetch(`/attendance/breaks/${id}`, { method: "PUT", body: JSON.stringify({ superAdminComment: reviewComment[id] || "" }) });
-      if (!r.ok) throw new Error();
-      addToast("Break reviewed", "success");
-      load();
-    } catch { addToast("Failed to review break", "error"); }
-  };
-
   const handleOverride = async () => {
     try {
       const r = await apiFetch("/attendance/admin-override", { method: "POST", body: JSON.stringify(overrideForm) });
@@ -3042,16 +2978,7 @@ function AttendancePage({ addToast, user }) {
     } catch { addToast("Failed to override", "error"); }
   };
 
-  const normalizeId = (v) => (v && typeof v === "object") ? (v._id || v.id || "") : (v || "");
-  const getRowUser = (r) => {
-    const embedded = safeObj(r.user) || safeObj(r.userId) || safeObj(r.employee) || safeObj(r.employeeId);
-    if (embedded?.name) return embedded;
-    const id = normalizeId(r.user) || normalizeId(r.userId) || normalizeId(r.employee) || normalizeId(r.employeeId);
-    return users.find(u => String(u._id || u.id) === String(id)) || embedded || null;
-  };
-  const getRowName = (r) => getRowUser(r)?.name || r.userName || r.employeeName || r.name || "Employee";
-  const getRowDept = (r) => getRowUser(r)?.department || getRowUser(r)?.jobTitle || r.department || r.jobTitle || "";
-  const filtered = records.filter(r => { if (!search) return true; const name = getRowName(r); return name.toLowerCase().includes(search.toLowerCase()); });
+  const filtered = records.filter(r => { if (!search) return true; const name = r.userId?.name || r.user?.name || ""; return name.toLowerCase().includes(search.toLowerCase()); });
   const present  = filtered.filter(r => ["present","on_time","early"].includes(r.status?.toLowerCase())).length;
   const absent   = filtered.filter(r => r.status?.toLowerCase() === "absent").length;
   const late     = filtered.filter(r => r.status?.toLowerCase() === "late").length;
@@ -3060,8 +2987,8 @@ function AttendancePage({ addToast, user }) {
 
   const getDaysInMonth = (m, y) => new Date(y, m, 0).getDate();
   const getDotColor = s => { const sl = s?.toLowerCase(); if (["present","on_time"].includes(sl)) return C.green; if (sl==="early") return C.cyan || C.green; if (sl==="absent") return C.red; if (sl==="late") return C.amber; if (sl==="half_day") return C.blue; if (sl==="on_leave"||sl==="on leave") return C.purple; if (sl==="holiday") return C.purple; return C.t3; };
-  const formatTime = t => formatISTTime(t);
-  const formatDate = t => formatISTDate(t);
+  const formatTime = t => { if (!t) return "—"; try { return new Date(t).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }); } catch { return t; } };
+  const formatDate = t => { if (!t) return "—"; try { return new Date(t).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); } catch { return t; } };
 
   return (
     <PageShell title="Attendance" sub={isAdmin(user) ? "Manage employee attendance" : "Your attendance records"}
@@ -3098,17 +3025,10 @@ function AttendancePage({ addToast, user }) {
       {(() => {
         const sessionActive = todayRec?.sessionActive || (todayRec?.checkIn && !todayRec?.checkOut);
         const sessionDone   = !!todayRec?.checkOut;
-        const sessionStart  = todayRec?.sessionStartedAt || todayRec?.checkIn;
-        const elapsedSecsRaw = sessionStart && !sessionDone ? Math.floor((liveTime - new Date(sessionStart)) / 1000) : 0;
-        const elapsedSecs   = Number.isFinite(elapsedSecsRaw) && elapsedSecsRaw >= 0 && elapsedSecsRaw < 86400 ? elapsedSecsRaw : 0;
-        const breakStart = activeBreak?.breakStart;
-        const breakAllowedSecs = Number(activeBreak?.allowedMinutes || settings?.breakAllowedMinutes || 15) * 60;
-        const breakElapsed = breakStart ? Math.max(0, Math.floor((liveTime - new Date(breakStart)) / 1000)) : 0;
-        const breakRemaining = Math.max(0, breakAllowedSecs - breakElapsed);
-        const breakLate = Math.max(0, breakElapsed - breakAllowedSecs);
+        const elapsedSecs   = todayRec?.checkIn && !sessionDone ? Math.floor((liveTime - new Date(todayRec.checkIn)) / 1000) : 0;
         const statusColor   = sessionDone ? C.blue : sessionActive ? C.green : C.t3;
-        const statusLabel   = sessionDone ? "Completed" : activeBreak ? "☕ On Break" : sessionActive ? "● Live" : "Not Started";
-        const shiftWindowText = formatShiftFromSettings(settings, windows, display);
+        const statusLabel   = sessionDone ? "Completed" : sessionActive ? "● Live" : "Not Started";
+        const shiftWindowText = formatShiftFromSettings(settings);
         // Pre-check-in hint: what would happen if user clicks Start now?
         let hint = null;
         if (!sessionActive && !sessionDone && wouldBe) {
@@ -3118,8 +3038,10 @@ function AttendancePage({ addToast, user }) {
             hint = { kind: "info", msg: "You're early — will be marked EARLY", color: C.cyan || C.green };
           } else if (wouldBe.status === "present") {
             hint = { kind: "ok", msg: "Within window — will be marked PRESENT", color: C.green };
-          } else if (wouldBe.status === "absent") {
-            hint = { kind: "warn", msg: "After grace — attendance will be marked ABSENT, but live session can still become ACTIVE", color: C.red };
+          } else if (wouldBe.status === "late") {
+            hint = { kind: "warn", msg: "After grace — will be marked LATE", color: C.amber };
+          } else if (wouldBe.status === "half_day") {
+            hint = { kind: "warn", msg: "Very late — will be marked HALF DAY", color: C.amber };
           }
         }
         return (
@@ -3127,15 +3049,15 @@ function AttendancePage({ addToast, user }) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>My Work Session</h2>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                {windows && <span style={{ fontSize: 11, color: C.t2 }}>Shift: {shiftWindowText}</span>}
+                <span style={{ fontSize: 11, color: C.t2 }}>Shift: {shiftWindowText}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: statusColor + "18", padding: "4px 12px", borderRadius: 20 }}>{statusLabel}</span>
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: hint ? 14 : 20 }}>
               {[
-                { label: "Session Started", value: todayRec?.checkIn ? (display?.checkInIST || formatTime(todayRec.checkIn)) : "—", sub: todayRec?.checkIn ? formatDate(todayRec.checkIn) : "Not started yet", color: todayRec?.checkIn ? C.green : C.t3 },
-                { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : safeHours(todayRec?.totalHours) !== "—" ? safeHours(todayRec.totalHours)+" total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
-                { label: "Session End",     value: todayRec?.checkOut ? (display?.checkOutIST || formatTime(todayRec.checkOut)) : "—", sub: todayRec?.checkOut ? "Checked out" : "Still running", color: todayRec?.checkOut ? C.red : C.t3 },
+                { label: "Session Started", value: todayRec?.checkIn ? formatTime(todayRec.checkIn) : "—", sub: todayRec?.checkIn ? new Date(todayRec.checkIn).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "Not started yet", color: todayRec?.checkIn ? C.green : C.t3 },
+                { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : safeAttendanceHours(todayRec?.totalHours) !== "—" ? safeAttendanceHours(todayRec.totalHours)+" total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
+                { label: "Session End",     value: todayRec?.checkOut ? formatTime(todayRec.checkOut) : "—", sub: todayRec?.checkOut ? "Checked out" : "Still running", color: todayRec?.checkOut ? C.red : C.t3 },
               ].map(x => (
                 <div key={x.label} style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
                   <p style={{ fontSize: 10, color: C.t2, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>{x.label}</p>
@@ -3151,7 +3073,7 @@ function AttendancePage({ addToast, user }) {
             )}
             {sessionDone ? (
               <div style={{ padding: "12px 16px", background: C.blue+"14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
-                <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {safeHours(todayRec?.totalHours) !== "—" ? safeHours(todayRec.totalHours)+" worked" : ""} · {statusBadge(todayRec?.status)}</p>
+                <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {safeAttendanceHours(todayRec?.totalHours) !== "—" ? safeAttendanceHours(todayRec.totalHours)+" worked" : ""} · {statusBadge(todayRec?.status)}</p>
                 <p style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>You're done for today. Re-check-in is disabled.</p>
               </div>
             ) : sessionActive ? (
@@ -3166,67 +3088,6 @@ function AttendancePage({ addToast, user }) {
           </div>
         );
       })()}
-
-
-      {(sessionActive || activeBreak) && (
-        <div className="card" style={{ padding: 18, marginBottom: 16, borderColor: activeBreak ? C.amber + "55" : C.border }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-            <div>
-              <h3 style={{ fontSize: 14, fontWeight: 800, color: C.t1 }}>Break Control</h3>
-              <p style={{ fontSize: 12, color: C.t2, marginTop: 3 }}>
-                Allowed: {settings?.breakAllowedMinutes ?? 15} min · Max/day: {settings?.maxBreaksPerDay ?? 2}
-              </p>
-            </div>
-            {activeBreak ? <Badge label="ON BREAK" color={C.amber} /> : <Badge label="ACTIVE" color={C.green} />}
-          </div>
-          {activeBreak ? (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center" }}>
-              <div style={{ padding: 14, background: C.amberG, border: `1px solid ${C.amber}33`, borderRadius: 12 }}>
-                <p style={{ fontSize: 11, color: C.t2, marginBottom: 5 }}>Break Timer</p>
-                <p style={{ fontSize: 24, fontWeight: 900, color: breakLate > 0 ? C.red : C.amber, fontVariantNumeric: "tabular-nums" }}>
-                  {breakLate > 0 ? `+ ${fmtElapsed(breakLate)}` : fmtElapsed(breakRemaining)}
-                </p>
-                {breakLate > 0 && (
-                  <Inp value={breakReason} onChange={e => setBreakReason(e.target.value)} placeholder="Optional reason for late return" style={{ marginTop: 10 }} />
-                )}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <button className="btn-pri" onClick={handleEndBreak} disabled={checkLoading}>Resume Work</button>
-                <button className="btn-ghost" onClick={handleUndoBreak} disabled={checkLoading}><RefreshCw size={13}/>Undo Break</button>
-              </div>
-            </div>
-          ) : (
-            <button className="btn-ghost" onClick={handleStartBreak} disabled={checkLoading || settings?.breakEnabled === false} style={{ width: "100%", justifyContent: "center" }}>
-              <Clock size={14}/> Start Break
-            </button>
-          )}
-        </div>
-      )}
-
-      {isAdmin(user) && breaks.length > 0 && (
-        <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 800, color: C.t1, marginBottom: 12 }}>Break Records</h3>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr style={{ borderBottom: `1px solid ${C.border}` }}>{["Employee","Start","End","Allowed","Actual","Late","Reason","Admin Comment"].map(h=><th key={h} style={{ padding:"9px 10px", textAlign:"left", fontSize:10, color:C.t3, textTransform:"uppercase" }}>{h}</th>)}</tr></thead>
-              <tbody>{breaks.slice(0, 10).map(b => (
-                <tr key={b._id} className="tr">
-                  <td style={{ padding:"10px", fontSize:12 }}>{b.user?.name || "Employee"}</td>
-                  <td style={{ padding:"10px", fontSize:12, color:C.t2 }}>{formatTime(b.breakStart)}</td>
-                  <td style={{ padding:"10px", fontSize:12, color:C.t2 }}>{formatTime(b.breakEnd)}</td>
-                  <td style={{ padding:"10px", fontSize:12 }}>{b.allowedMinutes}m</td>
-                  <td style={{ padding:"10px", fontSize:12 }}>{b.actualMinutes || "—"}m</td>
-                  <td style={{ padding:"10px", fontSize:12, color: b.lateMinutes > 0 ? C.red : C.green }}>{b.lateMinutes || 0}m</td>
-                  <td style={{ padding:"10px", fontSize:12, color:C.t2 }}>{b.employeeReason || "—"}</td>
-                  <td style={{ padding:"10px", minWidth:220 }}>
-                    {user?.role === "super_admin" ? <div style={{ display:"flex", gap:6 }}><Inp value={reviewComment[b._id] ?? b.superAdminComment ?? ""} onChange={e => setReviewComment(p => ({ ...p, [b._id]: e.target.value }))} placeholder="Comment" /><button className="btn-ghost" onClick={() => handleReviewBreak(b._id)}>Save</button></div> : <span style={{ fontSize:12, color:C.t2 }}>{b.superAdminComment || "—"}</span>}
-                  </td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {tab === "monthly" && (
         <div className="card" style={{ padding: 20, marginBottom: 16 }}>
@@ -3249,7 +3110,7 @@ function AttendancePage({ addToast, user }) {
                 <div key={day} style={{ background: isToday ? C.accentG : "rgba(255,255,255,0.02)", border: `1px solid ${isToday ? C.accent + "44" : C.border}`, borderRadius: 10, padding: "8px 6px", minHeight: 56, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? C.accent : C.t2 }}>{day}</span>
                   <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
-                    {recs.slice(0, 4).map((r, ri) => <div key={ri} title={`${getRowName(r)}: ${r.status}`} style={{ width: 7, height: 7, borderRadius: "50%", background: getDotColor(r.status) }} />)}
+                    {recs.slice(0, 4).map((r, ri) => <div key={ri} title={`${r.user?.name || r.userId?.name || "Employee"}: ${r.status}`} style={{ width: 7, height: 7, borderRadius: "50%", background: getDotColor(r.status) }} />)}
                   </div>
                 </div>
               );
@@ -3277,20 +3138,20 @@ function AttendancePage({ addToast, user }) {
                 <td style={{ padding: "12px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                     <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.accent, flexShrink: 0 }}>
-                      {(getRowName(row)?.[0] || "?").toUpperCase()}
+                      {(row.userId?.name || row.user?.name || "?")[0]?.toUpperCase()}
                     </div>
                     <div>
-                      <p style={{ fontWeight: 600, fontSize: 13 }}>{getRowName(row)}</p>
-                      {getRowDept(row) && <p style={{ fontSize: 11, color: C.t2 }}>{getRowDept(row)}</p>}
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>{row.userId?.name || row.user?.name || "—"}</p>
+                      {(row.userId?.department || row.user?.department) && <p style={{ fontSize: 11, color: C.t2 }}>{row.userId?.department || row.user?.department}</p>}
                     </div>
                   </div>
                 </td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{formatDate(row.date)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.green, fontWeight: 500 }}>{formatTime(row.checkIn || row.loginTime)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.red, fontWeight: 500 }}>{formatTime(row.checkOut || row.logoutTime)}</td>
-                <td style={{ padding: "12px 16px", fontSize: 13 }}>{safeHours(row.totalHours ?? row.hoursWorked) !== "—" ? <span style={{ color: C.cyan, fontWeight: 600 }}>{safeHours(row.totalHours ?? row.hoursWorked)}</span> : "—"}</td>
+                <td style={{ padding: "12px 16px", fontSize: 13 }}>{safeAttendanceHours(row.totalHours ?? row.hoursWorked) !== "—" ? <span style={{ color: C.cyan, fontWeight: 600 }}>{safeAttendanceHours(row.totalHours ?? row.hoursWorked)}</span> : "—"}</td>
                 <td style={{ padding: "12px 16px" }}>{statusBadge(row.status)}</td>
-                {isAdmin(user) && <td style={{ padding: "12px 16px" }}><button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => { setOverrideForm({ userId: getRowUser(row)?._id || row.user || row.userId || "", date: row.date?.split("T")[0] || new Date().toISOString().split("T")[0], status: row.status || "present", note: "" }); setOverrideModal(true); }}><Edit2 size={12} /></button></td>}
+                {isAdmin(user) && <td style={{ padding: "12px 16px" }}><button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => { setOverrideForm({ userId: row.user?._id || row.userId?._id || row.userId || "", date: row.date?.split("T")[0] || new Date().toISOString().split("T")[0], status: row.status || "present", note: "" }); setOverrideModal(true); }}><Edit2 size={12} /></button></td>}
               </tr>
             ))}
           </tbody>
@@ -4983,7 +4844,6 @@ function CompanyPage({ addToast, user }) {
     halfDayCutoffMinutes: "105", absentCutoffMinutes: "165",
     minWorkingHours: "7", halfDayHours: "4",
     autoEndBufferMinutes: "0", autoEndHour: "23", autoEndMinute: "59",
-    maxSessionHours: "8", breakEnabled: true, breakAllowedMinutes: "15", maxBreaksPerDay: "2",
   });
 
   useEffect(() => {
@@ -5012,10 +4872,6 @@ function CompanyPage({ addToast, user }) {
           autoEndBufferMinutes: String(s?.autoEndBufferMinutes ?? 0),
           autoEndHour:        String(s?.autoEndHour ?? 23),
           autoEndMinute:      String(s?.autoEndMinute ?? 59),
-          maxSessionHours:   String(s?.maxSessionHours ?? 8),
-          breakEnabled:      s?.breakEnabled !== false,
-          breakAllowedMinutes: String(s?.breakAllowedMinutes ?? 15),
-          maxBreaksPerDay:   String(s?.maxBreaksPerDay ?? 2),
         });
       } catch { addToast("Failed to load settings", "error"); }
       setLoading(false);
@@ -5041,10 +4897,6 @@ function CompanyPage({ addToast, user }) {
         autoEndBufferMinutes: Number(form.autoEndBufferMinutes),
         autoEndHour:        Number(form.autoEndHour),
         autoEndMinute:      Number(form.autoEndMinute),
-        maxSessionHours:   Math.min(20, Math.max(1, Number(form.maxSessionHours) || 8)),
-        breakEnabled:      !!form.breakEnabled,
-        breakAllowedMinutes: Number(form.breakAllowedMinutes),
-        maxBreaksPerDay:   Number(form.maxBreaksPerDay),
       };
       const r = await apiFetch("/company", { method: "PUT", body: JSON.stringify(payload) });
       if (!r.ok) throw new Error();
@@ -5113,17 +4965,11 @@ function CompanyPage({ addToast, user }) {
             <FormField label="Half Day Threshold (hours)">
               <Inp value={form.halfDayHours} onChange={e => setForm(p => ({ ...p, halfDayHours: e.target.value }))} placeholder="4" type="text" inputMode="decimal" pattern="[0-9]*" />
             </FormField>
-            <FormField label="Max Session Hours (1–20)">
-              <Inp value={form.maxSessionHours} onChange={e => setForm(p => ({ ...p, maxSessionHours: e.target.value }))} placeholder="8" type="text" inputMode="decimal" pattern="[0-9]*" />
+            <FormField label="Session Timeout (hours)">
+              <Inp value={form.sessionTimeoutHours} onChange={e => setForm(p => ({ ...p, sessionTimeoutHours: e.target.value }))} placeholder="8" type="text" inputMode="decimal" pattern="[0-9]*" />
             </FormField>
             <FormField label="Auto End Buffer After Shift End (minutes)">
               <Inp value={form.autoEndBufferMinutes} onChange={e => setForm(p => ({ ...p, autoEndBufferMinutes: e.target.value }))} placeholder="0" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </FormField>
-            <FormField label="Break Minutes">
-              <Inp value={form.breakAllowedMinutes} onChange={e => setForm(p => ({ ...p, breakAllowedMinutes: e.target.value }))} placeholder="15" type="text" inputMode="decimal" pattern="[0-9]*" />
-            </FormField>
-            <FormField label="Max Breaks Per Day">
-              <Inp value={form.maxBreaksPerDay} onChange={e => setForm(p => ({ ...p, maxBreaksPerDay: e.target.value }))} placeholder="2" type="text" inputMode="decimal" pattern="[0-9]*" />
             </FormField>
           </div>
 
