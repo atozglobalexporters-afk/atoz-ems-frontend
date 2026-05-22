@@ -68,50 +68,9 @@ const validHoursValue = (value) => {
   return Number.isFinite(n) && n >= 0 ? n : null;
 };
 
-// Attendance hours must always be a realistic single-day value.
-// This prevents corrupted legacy rows like 494075.7h from reaching the UI.
-const safeAttendanceHours = (value, digits = 1) => {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "—";
-  if (n < 0 || n > 24) return "—";
-  return `${n.toFixed(digits)}h`;
-};
-
-const fmtHours = (value, digits = 1) => safeAttendanceHours(value, digits);
-
-// Use live attendance settings from /attendance/today for display.
-// Do not format shiftStart/shiftEnd Date windows here; those can timezone-shift in the browser.
-const formatShiftFromSettings = (settings) => {
-  if (!settings) return "No Shift Assigned";
-
-  const readNum = (...keys) => {
-    for (const key of keys) {
-      const v = settings?.[key];
-      if (v !== undefined && v !== null && v !== "") {
-        const n = Number(v);
-        if (Number.isFinite(n)) return n;
-      }
-    }
-    return null;
-  };
-
-  const startHour = readNum("startHour", "shiftStartHour", "loginStartHour");
-  const startMinute = readNum("startMinute", "shiftStartMinute", "loginStartMinute") ?? 0;
-  const endHour = readNum("endHour", "shiftEndHour", "logoutEndHour");
-  const endMinute = readNum("endMinute", "shiftEndMinute", "logoutEndMinute") ?? 0;
-
-  if (startHour === null || endHour === null) return "No Shift Assigned";
-
-  const format = (h, m) => {
-    const hour = Number(h);
-    const minute = Number(m);
-    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return "—";
-    const ampm = hour >= 12 ? "PM" : "AM";
-    const hh = ((hour + 11) % 12) + 1;
-    return `${String(hh).padStart(2, "0")}:${String(minute).padStart(2, "0")} ${ampm}`;
-  };
-
-  return `${format(startHour, startMinute)} — ${format(endHour, endMinute)}`;
+const fmtHours = (value, digits = 1) => {
+  const n = validHoursValue(value);
+  return n === null ? "—" : `${n.toFixed(digits)}h`;
 };
 
 // ─── SHIFT RESOLUTION ─────────────────────────────────────────
@@ -1477,7 +1436,7 @@ function DashboardPage({ addToast, user, setPage }) {
       const r = await apiFetch("/attendance/checkout", { method: "POST" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.message || "Failed");
-      addToast("Session ended. " + (safeAttendanceHours(d.attendance?.totalHours) !== "—" ? `Total: ${safeAttendanceHours(d.attendance.totalHours)} · ${d.attendance.status}` : ""), "success", {
+      addToast("Session ended. " + (fmtHours(d.attendance?.totalHours) !== "—" ? `Total: ${fmtHours(d.attendance.totalHours)} · ${d.attendance.status}` : ""), "success", {
         label: "UNDO",
         onClick: async () => {
           try {
@@ -1672,7 +1631,7 @@ function DashboardPage({ addToast, user, setPage }) {
                 <div style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
                   <p style={{ fontSize: 11, color: C.t2, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".06em" }}>Elapsed Time</p>
                   <p style={{ fontSize: 16, fontWeight: 800, color: sessionActive ? C.accent : C.t3, fontVariantNumeric: "tabular-nums" }}>
-                    {sessionActive ? fmtElapsed(elapsedSecs) : safeAttendanceHours(todayRec?.totalHours) !== "—" ? `${safeAttendanceHours(todayRec.totalHours)} total` : "—"}
+                    {sessionActive ? fmtElapsed(elapsedSecs) : fmtHours(todayRec?.totalHours) !== "—" ? `${fmtHours(todayRec.totalHours)} total` : "—"}
                   </p>
                   <p style={{ fontSize: 10, color: C.t3, marginTop: 3 }}>{sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start"}</p>
                 </div>
@@ -1707,7 +1666,7 @@ function DashboardPage({ addToast, user, setPage }) {
                 )
               ) : (
                 <div style={{ padding: "12px 16px", background: C.blue + "14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
-                  <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed for today · {safeAttendanceHours(todayRec?.totalHours) !== "—" ? `${safeAttendanceHours(todayRec.totalHours)} worked` : ""}</p>
+                  <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed for today · {fmtHours(todayRec?.totalHours) !== "—" ? `${fmtHours(todayRec.totalHours)} worked` : ""}</p>
                 </div>
               )}
             </div>
@@ -2870,6 +2829,10 @@ function AttendancePage({ addToast, user }) {
   const [wouldBe, setWouldBe] = useState(null);
   const [search, setSearch] = useState("");
   const [liveTime, setLiveTime] = useState(new Date());
+  const [breaks, setBreaks] = useState([]);
+  const [activeBreak, setActiveBreak] = useState(null);
+  const [breakLoading, setBreakLoading] = useState(false);
+  const [breakReason, setBreakReason] = useState('');
   useEffect(() => {
     const t = setInterval(() => setLiveTime(new Date()), 1000);
     return () => clearInterval(t);
@@ -2896,7 +2859,7 @@ function AttendancePage({ addToast, user }) {
         }));
         setRecords(recs);
         setUsers(safeArr(uR.value, "users", "data"));
-        setSettings(tR.value?.settings || tR.value?.attendance?.settings || sR.value?.company || sR.value);
+        setSettings(sR.value?.company || sR.value);
         // admin gets their own today record for check-in/out card
         setTodayRec(tR.value?.attendance || null);
         setWindows(tR.value?.windows || null);
@@ -2913,16 +2876,61 @@ function AttendancePage({ addToast, user }) {
           hoursWorked: r.hoursWorked ?? r.totalHours ?? 0,
         }));
         setRecords(recs);
-        setSettings(tR.value?.settings || tR.value?.attendance?.settings || sR.value?.company || sR.value);
+        setSettings(sR.value?.company || sR.value);
         // prefer the live /today endpoint over searching the list
         setTodayRec(tR.value?.attendance || recs.find(r => r.date && new Date(r.date).toDateString() === new Date().toDateString()) || null);
         setWindows(tR.value?.windows || null);
         setWouldBe(tR.value?.wouldBe || null);
       }
+      try {
+        const bR = await apiFetch('/attendance/breaks').then(r => r.json());
+        const bs = safeArr(bR, 'breaks', 'data');
+        setBreaks(bs);
+        setActiveBreak(bs.find(b => b.status === 'on_break') || null);
+      } catch {}
     } catch { addToast("Failed to load attendance", "error"); }
     setLoading(false);
   }, [tab, month, year, user]);
   useEffect(() => { load(); }, [load]);
+
+  const handleStartBreak = async () => {
+    setBreakLoading(true);
+    try {
+      const r = await apiFetch('/attendance/break/start', { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || 'Break start failed');
+      addToast('Break started', 'success');
+      setBreakReason('');
+      load();
+    } catch (e) { addToast(e.message || 'Break start failed', 'error'); }
+    setBreakLoading(false);
+  };
+
+  const handleEndBreak = async () => {
+    setBreakLoading(true);
+    try {
+      const r = await apiFetch('/attendance/break/end', { method: 'POST', body: JSON.stringify({ employeeReason: breakReason }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || 'Break end failed');
+      addToast(d.breakLog?.lateMinutes > 0 ? `Returned ${d.breakLog.lateMinutes} min late` : 'Break completed', d.breakLog?.lateMinutes > 0 ? 'warning' : 'success');
+      setBreakReason('');
+      load();
+    } catch (e) { addToast(e.message || 'Break end failed', 'error'); }
+    setBreakLoading(false);
+  };
+
+  const handleUndoBreak = async () => {
+    setBreakLoading(true);
+    try {
+      const r = await apiFetch('/attendance/break/undo', { method: 'POST' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.message || 'Undo break failed');
+      addToast('Break cancelled', 'success');
+      setBreakReason('');
+      load();
+    } catch (e) { addToast(e.message || 'Undo break failed', 'error'); }
+    setBreakLoading(false);
+  };
 
   const handleCheckIn = async () => {
     setCheckLoading(true);
@@ -2978,7 +2986,23 @@ function AttendancePage({ addToast, user }) {
     } catch { addToast("Failed to override", "error"); }
   };
 
-  const filtered = records.filter(r => { if (!search) return true; const name = r.userId?.name || r.user?.name || ""; return name.toLowerCase().includes(search.toLowerCase()); });
+  const userLookup = new Map((users || []).map(u => [String(u._id), u]));
+  const resolveEmployee = (row = {}) => {
+    const raw = row.userId || row.user || row.employee || null;
+    const rawObj = raw && typeof raw === 'object' ? raw : null;
+    const rawId = rawObj?._id || (typeof raw === 'string' ? raw : '') || row.user || row.userId || row.employeeId || '';
+    const listed = rawId ? userLookup.get(String(rawId)) : null;
+    const name = rawObj?.name || listed?.name || row.employeeNameSnapshot || row.employeeName || row.name || 'Unknown Employee';
+    const department = rawObj?.department || listed?.department || row.employeeDepartmentSnapshot || row.department || '';
+    const jobTitle = rawObj?.jobTitle || listed?.jobTitle || row.employeeJobTitleSnapshot || row.jobTitle || '';
+    const initial = (name && name !== 'Unknown Employee' ? name.trim()[0] : 'U').toUpperCase();
+    return { name, department, jobTitle, initial, id: rawId };
+  };
+  const filtered = records.filter(r => {
+    if (!search) return true;
+    const emp = resolveEmployee(r);
+    return [emp.name, emp.department, emp.jobTitle].some(v => String(v || '').toLowerCase().includes(search.toLowerCase()));
+  });
   const present  = filtered.filter(r => ["present","on_time","early"].includes(r.status?.toLowerCase())).length;
   const absent   = filtered.filter(r => r.status?.toLowerCase() === "absent").length;
   const late     = filtered.filter(r => r.status?.toLowerCase() === "late").length;
@@ -2987,8 +3011,8 @@ function AttendancePage({ addToast, user }) {
 
   const getDaysInMonth = (m, y) => new Date(y, m, 0).getDate();
   const getDotColor = s => { const sl = s?.toLowerCase(); if (["present","on_time"].includes(sl)) return C.green; if (sl==="early") return C.cyan || C.green; if (sl==="absent") return C.red; if (sl==="late") return C.amber; if (sl==="half_day") return C.blue; if (sl==="on_leave"||sl==="on leave") return C.purple; if (sl==="holiday") return C.purple; return C.t3; };
-  const formatTime = t => { if (!t) return "—"; try { return new Date(t).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }); } catch { return t; } };
-  const formatDate = t => { if (!t) return "—"; try { return new Date(t).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); } catch { return t; } };
+  const formatTime = t => { if (!t) return "—"; try { return new Date(t).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true }); } catch { return t; } };
+  const formatDate = t => { if (!t) return "—"; try { return new Date(t).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" }); } catch { return t; } };
 
   return (
     <PageShell title="Attendance" sub={isAdmin(user) ? "Manage employee attendance" : "Your attendance records"}
@@ -3028,7 +3052,8 @@ function AttendancePage({ addToast, user }) {
         const elapsedSecs   = todayRec?.checkIn && !sessionDone ? Math.floor((liveTime - new Date(todayRec.checkIn)) / 1000) : 0;
         const statusColor   = sessionDone ? C.blue : sessionActive ? C.green : C.t3;
         const statusLabel   = sessionDone ? "Completed" : sessionActive ? "● Live" : "Not Started";
-        const shiftWindowText = formatShiftFromSettings(settings);
+        const fmtT          = d => d ? new Date(d).toLocaleTimeString("en-IN",{ timeZone:"Asia/Kolkata", hour:"2-digit", minute:"2-digit", hour12:true }) : "—";
+        const shiftWindowText = windows ? `${fmtT(windows.shiftStart)} — ${fmtT(windows.shiftEnd)}` : "—";
         // Pre-check-in hint: what would happen if user clicks Start now?
         let hint = null;
         if (!sessionActive && !sessionDone && wouldBe) {
@@ -3049,14 +3074,14 @@ function AttendancePage({ addToast, user }) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>My Work Session</h2>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 11, color: C.t2 }}>Shift: {shiftWindowText}</span>
+                {windows && <span style={{ fontSize: 11, color: C.t2 }}>Shift: {shiftWindowText}</span>}
                 <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: statusColor + "18", padding: "4px 12px", borderRadius: 20 }}>{statusLabel}</span>
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: hint ? 14 : 20 }}>
               {[
-                { label: "Session Started", value: todayRec?.checkIn ? formatTime(todayRec.checkIn) : "—", sub: todayRec?.checkIn ? new Date(todayRec.checkIn).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "Not started yet", color: todayRec?.checkIn ? C.green : C.t3 },
-                { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : safeAttendanceHours(todayRec?.totalHours) !== "—" ? safeAttendanceHours(todayRec.totalHours)+" total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
+                { label: "Session Started", value: todayRec?.checkIn ? formatTime(todayRec.checkIn) : "—", sub: todayRec?.checkIn ? new Date(todayRec.checkIn).toLocaleDateString("en-IN",{timeZone:"Asia/Kolkata",day:"numeric",month:"short",year:"numeric"}) : "Not started yet", color: todayRec?.checkIn ? C.green : C.t3 },
+                { label: "Elapsed Time",    value: sessionActive ? fmtElapsed(elapsedSecs) : fmtHours(todayRec?.totalHours) !== "—" ? fmtHours(todayRec.totalHours)+" total" : "—", sub: sessionActive ? "Running" : sessionDone ? "Session ended" : "Awaiting start", color: sessionActive ? C.accent : C.t3 },
                 { label: "Session End",     value: todayRec?.checkOut ? formatTime(todayRec.checkOut) : "—", sub: todayRec?.checkOut ? "Checked out" : "Still running", color: todayRec?.checkOut ? C.red : C.t3 },
               ].map(x => (
                 <div key={x.label} style={{ padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${C.border}` }}>
@@ -3071,9 +3096,36 @@ function AttendancePage({ addToast, user }) {
                 <AlertCircle size={14} />{hint.msg}
               </div>
             )}
+            {sessionActive && (() => {
+              const allowed = Number(activeBreak?.allowedMinutes || settings?.breakAllowedMinutes || 15);
+              const elapsed = activeBreak?.breakStart ? Math.max(0, Math.floor((liveTime - new Date(activeBreak.breakStart)) / 1000)) : 0;
+              const remain = Math.max(0, allowed * 60 - elapsed);
+              const late = Math.max(0, elapsed - allowed * 60);
+              return (
+                <div style={{ padding: "12px 14px", background: activeBreak ? C.amberG : "rgba(255,255,255,0.03)", border: `1px solid ${activeBreak ? C.amber + "44" : C.border}`, borderRadius: 12, marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div>
+                      <p style={{ fontSize: 12, color: activeBreak ? C.amber : C.t2, fontWeight: 800 }}>{activeBreak ? "ON BREAK" : "Break"}</p>
+                      <p style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>
+                        {activeBreak ? (late > 0 ? `Late by ${Math.ceil(late/60)} min` : `${fmtElapsed(remain)} remaining`) : `Allowed: ${settings?.breakAllowedMinutes || 15} min · Max/day: ${settings?.maxBreaksPerDay || 2}`}
+                      </p>
+                    </div>
+                    {activeBreak ? (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {late > 0 && <input className="inp" value={breakReason} onChange={e => setBreakReason(e.target.value)} placeholder="Optional late reason…" style={{ width: 190 }} />}
+                        <button className="btn-ghost" onClick={handleUndoBreak} disabled={breakLoading}>Undo Break</button>
+                        <button className="btn-pri" onClick={handleEndBreak} disabled={breakLoading}>Resume Work</button>
+                      </div>
+                    ) : (
+                      <button className="btn-ghost" onClick={handleStartBreak} disabled={breakLoading}>Start Break</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             {sessionDone ? (
               <div style={{ padding: "12px 16px", background: C.blue+"14", border: `1px solid ${C.blue}33`, borderRadius: 12, textAlign: "center" }}>
-                <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {safeAttendanceHours(todayRec?.totalHours) !== "—" ? safeAttendanceHours(todayRec.totalHours)+" worked" : ""} · {statusBadge(todayRec?.status)}</p>
+                <p style={{ fontSize: 13, color: C.blue, fontWeight: 600 }}>✓ Session completed · {fmtHours(todayRec?.totalHours) !== "—" ? fmtHours(todayRec.totalHours)+" worked" : ""} · {statusBadge(todayRec?.status)}</p>
                 <p style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>You're done for today. Re-check-in is disabled.</p>
               </div>
             ) : sessionActive ? (
@@ -3110,7 +3162,7 @@ function AttendancePage({ addToast, user }) {
                 <div key={day} style={{ background: isToday ? C.accentG : "rgba(255,255,255,0.02)", border: `1px solid ${isToday ? C.accent + "44" : C.border}`, borderRadius: 10, padding: "8px 6px", minHeight: 56, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? C.accent : C.t2 }}>{day}</span>
                   <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
-                    {recs.slice(0, 4).map((r, ri) => <div key={ri} title={`${r.user?.name || r.userId?.name || "Employee"}: ${r.status}`} style={{ width: 7, height: 7, borderRadius: "50%", background: getDotColor(r.status) }} />)}
+                    {recs.slice(0, 4).map((r, ri) => <div key={ri} title={`${resolveEmployee(r).name}: ${r.status}`} style={{ width: 7, height: 7, borderRadius: "50%", background: getDotColor(r.status) }} />)}
                   </div>
                 </div>
               );
@@ -3138,20 +3190,20 @@ function AttendancePage({ addToast, user }) {
                 <td style={{ padding: "12px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                     <div style={{ width: 30, height: 30, borderRadius: 8, background: C.accentG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: C.accent, flexShrink: 0 }}>
-                      {(row.userId?.name || row.user?.name || "?")[0]?.toUpperCase()}
+                      {resolveEmployee(row).initial}
                     </div>
                     <div>
-                      <p style={{ fontWeight: 600, fontSize: 13 }}>{row.userId?.name || row.user?.name || "—"}</p>
-                      {(row.userId?.department || row.user?.department) && <p style={{ fontSize: 11, color: C.t2 }}>{row.userId?.department || row.user?.department}</p>}
+                      <p style={{ fontWeight: 600, fontSize: 13 }}>{resolveEmployee(row).name}</p>
+                      {(resolveEmployee(row).department || resolveEmployee(row).jobTitle) && <p style={{ fontSize: 11, color: C.t2 }}>{resolveEmployee(row).department || resolveEmployee(row).jobTitle}</p>}
                     </div>
                   </div>
                 </td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.t2 }}>{formatDate(row.date)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.green, fontWeight: 500 }}>{formatTime(row.checkIn || row.loginTime)}</td>
                 <td style={{ padding: "12px 16px", fontSize: 13, color: C.red, fontWeight: 500 }}>{formatTime(row.checkOut || row.logoutTime)}</td>
-                <td style={{ padding: "12px 16px", fontSize: 13 }}>{safeAttendanceHours(row.totalHours ?? row.hoursWorked) !== "—" ? <span style={{ color: C.cyan, fontWeight: 600 }}>{safeAttendanceHours(row.totalHours ?? row.hoursWorked)}</span> : "—"}</td>
+                <td style={{ padding: "12px 16px", fontSize: 13 }}>{fmtHours(row.totalHours || row.hoursWorked) !== "—" ? <span style={{ color: C.cyan, fontWeight: 600 }}>{fmtHours(row.totalHours || row.hoursWorked)}</span> : "—"}</td>
                 <td style={{ padding: "12px 16px" }}>{statusBadge(row.status)}</td>
-                {isAdmin(user) && <td style={{ padding: "12px 16px" }}><button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => { setOverrideForm({ userId: row.user?._id || row.userId?._id || row.userId || "", date: row.date?.split("T")[0] || new Date().toISOString().split("T")[0], status: row.status || "present", note: "" }); setOverrideModal(true); }}><Edit2 size={12} /></button></td>}
+                {isAdmin(user) && <td style={{ padding: "12px 16px" }}><button className="btn-icon" style={{ background: C.accentG, color: C.accent }} onClick={() => { setOverrideForm({ userId: resolveEmployee(row).id || row.user?._id || row.userId?._id || row.userId || "", date: row.date?.split("T")[0] || new Date().toISOString().split("T")[0], status: row.status || "present", note: "" }); setOverrideModal(true); }}><Edit2 size={12} /></button></td>}
               </tr>
             ))}
           </tbody>
